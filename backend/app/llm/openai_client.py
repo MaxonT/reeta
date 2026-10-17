@@ -2,7 +2,8 @@ import json
 
 from ..config import settings
 from ..content import AnswerKey
-from .base import LLMClient, template_phrase, validate_entries
+from ..persona import PERSONA_PROMPT
+from .base import LLMClient, checked_phrase, phrase_payload, validate_entries
 
 EXTRACT_SYSTEM = """You label sentences from a Professor's spoken Lecture about {topic}.
 For each sentence decide which Answer key concept it teaches, and whether it teaches it
@@ -14,10 +15,9 @@ Return strict JSON: {{"entries": [{{"sentence_idx": int, "concept_id": str,
 Answer key:
 {answer_key}"""
 
-PHRASE_SYSTEM = """You are the AI student. You only know what your Professor taught you.
-Rewrite the given result as one or two short first person sentences spoken to the Professor.
-Keep the given answer exactly. Quote the Professor's sentence if one is given.
-Never add facts, never explain beyond the notes, never correct the answer."""
+PHRASE_SYSTEM = PERSONA_PROMPT + """
+You get the graded result as JSON. Rewrite it as Reeta speaking to the Professor.
+The "template" field is a sample line in your voice; you may reuse it."""
 
 
 class OpenAIClient(LLMClient):
@@ -44,19 +44,12 @@ class OpenAIClient(LLMClient):
         return validate_entries(data.get("entries", []), sentences, key)
 
     def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
-        payload = {
-            "question": question["prompt"],
-            "my_answer": result["answer"] or "I don't know",
-            "reason": result["reason"],
-            "professor_said": [c["text"] for c in result["citations"]],
-            "never_taught": [key.label(c) for c in result["missing_concepts"]],
-            "template": template_phrase(result, question, key),
-        }
+        payload = phrase_payload(result, question, key)
         resp = self.client.chat.completions.create(
             model=settings.openai_model,
             temperature=0.7,
-            max_tokens=80,
+            max_tokens=120,
             messages=[{"role": "system", "content": PHRASE_SYSTEM},
                       {"role": "user", "content": json.dumps(payload)}],
         )
-        return resp.choices[0].message.content.strip()
+        return checked_phrase(resp.choices[0].message.content, result, question, key)

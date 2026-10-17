@@ -9,7 +9,7 @@ remembers every attempt. The frontend talks to it over HTTP only (see the main [
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-python -m pytest -q                       # 14 tests, no network, no keys
+python -m pytest -q                       # no network, no keys
 uvicorn app.main:app --reload --port 8000 # http://localhost:8000/docs for the interactive API
 ```
 
@@ -30,6 +30,7 @@ service.py     ReetaService: the game rules (ingest, confirm, exam, office hours
    ├── grading.py        pure functions, the only place answers are decided
    ├── sentences.py      timed segments -> sentences with start_ms / end_ms
    ├── content.py        loads and validates content/answer_key.json and content/exam.json
+   ├── persona.py        Reeta's voice: deterministic line bank and PERSONA_PROMPT for the LLM
    │
    ├── speech/  SpeechClient.transcribe(audio_path) -> [{idx, text, start_ms, end_ms}]
    │      openai_whisper.py   OpenAIWhisperClient    SPEECH_PROVIDER=openai (default)
@@ -84,6 +85,58 @@ The LLM never changes `answer` or `is_correct`.
 Office hours lists only the concepts failed in the last attempt, with what the AI student asks. The Report gives
 each concept a grade: A taught right first time, B fixed in Office hours, D still a misconception, F never taught.
 
+## Reeta loop
+
+A short daily loop, like Duolingo. Reeta is "the earnest dummy": she believes everything you say and repeats
+your mistakes back sincerely. Her voice lives in `app/persona.py`, a deterministic line bank (no LLM needed).
+`PERSONA_PROMPT` is the system prompt the OpenAI and OCI clients use to phrase lines; their output must still
+contain the graded answer verbatim, or the persona line is used. Grading is still only `grading.py`.
+
+Rounds are stored in `loop_rounds` and cleared by `POST /session/reset`. Dates use the server's local time.
+
+**`POST /loop/quiz`** picks up to 3 Exam questions: first those on concepts confirmed in the latest Lecture, then
+the weakest concepts (misconception, then missing, in Answer key order), then the rest in exam order. They are
+graded with `grade_exam` on the current Notebook. `passed` means every question was correct.
+
+```json
+{
+  "round_id": 1, "score": 1, "total": 3, "passed": false, "mood": "confused",
+  "result_line": "1 out of 3! Almost there. Can you help me with the rest?",
+  "results": [
+    {"question_id": "q6", "answer": "True", "is_correct": false, "reason": "misconception",
+     "concept_ids": ["independent_frames"], "citations": [{"text": "All the calls share the same variables.", "...": "..."}],
+     "line": "My notes say “All the calls share the same variables”, so obviously recursion is basically roommates sharing one fridge. I picked “True”!",
+     "question": {"id": "q6", "type": "true_false", "prompt": "When f(3) calls f(2), ...", "options": ["True", "False"],
+                  "required_concepts": ["independent_frames"]}}
+  ],
+  "streak": 0
+}
+```
+
+Each item in `results` has the same fields as in `POST /exam/take`.
+
+**`GET /loop/today`** is the home screen state.
+
+```json
+{
+  "streak": 3, "best_streak": 5,
+  "last_round_at": "2026-10-17T09:30:00", "days_since_last": 0,
+  "mood": "confused",
+  "ask": {"concept_id": "independent_frames", "label": "Independent frames", "reason": "misconception"},
+  "line": "I tried my best last time but something's off. Is it independent frames?",
+  "progress": {"mastered": 1, "total": 5},
+  "level": "Freshman"
+}
+```
+
+1. `streak`: consecutive calendar days with at least one passed round, ending today or yesterday. `best_streak`
+   is the longest run ever. `last_round_at` and `days_since_last` are `null` before the first round.
+2. `mood`: `sad` if the last round was 2 or more days ago, else `confused` if the last round failed, else `proud`
+   if a round passed today, else `listening`.
+3. `ask`: the first concept holding a misconception, else the first missing one, else (`review`) the concept
+   the rounds covered least recently.
+4. `level`: Freshman (0 to 1 mastered), Sophomore (2), Junior (3 to 4), Graduate (5).
+
 ## Data
 
 Content is read once at startup from `content/` and seeded into the database. Concept and misconception ids are
@@ -99,6 +152,8 @@ The Notebook tables and how "current knowledge" is computed are described in the
 
 1. `test_grading.py`: the three grading rules and citations
 2. `test_notebook.py`: confirm, supersede, office hours, mock extraction, sentence timestamps
+3. `test_search.py`: notebook search and concept edges
+4. `test_loop.py`: daily loop question picking, streak math, mood, ask, reset, persona lines
 
 Add a test whenever you change `grading.py` or `service.py`.
 

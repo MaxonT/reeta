@@ -125,6 +125,18 @@ def report(session_id: str = Session):
     return svc.report(session_id)
 
 
+@app.post("/loop/quiz")
+def loop_quiz(session_id: str = Session):
+    """Daily round: up to 3 questions, graded by grading.py, phrased by Reeta, recorded for the streak."""
+    return svc.loop_quiz(session_id)
+
+
+@app.get("/loop/today")
+def loop_today(session_id: str = Session):
+    """Streak, Reeta's mood and line, and the concept she wants to learn next."""
+    return svc.loop_today(session_id)
+
+
 @app.post("/session/reset")
 def reset(session_id: str = Session):
     svc.repo.reset_session(session_id)

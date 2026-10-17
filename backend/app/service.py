@@ -1,6 +1,9 @@
 """Business logic. Talks only to the SpeechClient / LLMClient / Repository interfaces."""
+from collections.abc import Callable
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
+from . import persona
 from .content import AnswerKey
 from .grading import CORRECT, MISCONCEPTION, NOT_TAUGHT, concept_status, grade_exam
 from .llm.base import LLMClient, template_phrase
@@ -10,10 +13,11 @@ from .speech.base import SpeechClient
 
 class ReetaService:
     def __init__(self, repo: Repository, speech: SpeechClient, llm: LLMClient, key: AnswerKey,
-                 audio_dir: Path, pass_threshold: float = 1.0):
+                 audio_dir: Path, pass_threshold: float = 1.0, clock: Callable[[], datetime] = datetime.now):
         self.repo, self.speech, self.llm, self.key = repo, speech, llm, key
         self.audio_dir = audio_dir
         self.pass_threshold = pass_threshold
+        self.clock = clock  # server local time; injectable so tests can time travel
 
     # 1-4. Record, transcribe, split, extract
     def ingest_lecture(self, session_id: str, kind: str, audio: bytes | None, audio_ext: str,
@@ -154,12 +158,7 @@ class ReetaService:
     def take_exam(self, session_id: str) -> dict:
         questions = self.repo.list_questions()
         results = grade_exam(questions, self.active_notebook(session_id))
-        for q, r in zip(questions, results):
-            try:
-                r["line"] = self.llm.phrase(r, q, self.key) or template_phrase(r, q, self.key)
-            except Exception:  # noqa: BLE001
-                r["line"] = template_phrase(r, q, self.key)
-            r["question"] = {k: q[k] for k in ("id", "type", "prompt", "options", "required_concepts")}
+        self._attach_lines(questions, results)
         score = sum(r["is_correct"] for r in results)
         attempt_id, attempt_no = self.repo.create_attempt(session_id, score)
         self.repo.add_answers(attempt_id, results)
@@ -168,6 +167,101 @@ class ReetaService:
             "passed": score >= self.pass_threshold * len(results),
             "results": results,
             "office_hours": self.office_hours(session_id),
+        }
+
+    def _attach_lines(self, questions: list[dict], results: list[dict]) -> None:
+        """LLM (or persona) phrases each graded result; the template is the last resort. Answers never change."""
+        for q, r in zip(questions, results):
+            try:
+                r["line"] = self.llm.phrase(r, q, self.key) or template_phrase(r, q, self.key)
+            except Exception:  # noqa: BLE001
+                r["line"] = template_phrase(r, q, self.key)
+            r["question"] = {k: q[k] for k in ("id", "type", "prompt", "options", "required_concepts")}
+
+    # Daily loop: a 3 question round, a streak, and Reeta's mood
+    def weak_concepts(self, session_id: str) -> list[tuple[str, str]]:
+        """[(concept_id, status)]: misconceptions first, then missing, each in Answer key order."""
+        active = self.active_notebook(session_id)
+        status = {cid: concept_status(active, cid) for cid in self.key.concept_ids}
+        return ([(c, MISCONCEPTION) for c in self.key.concept_ids if status[c] == MISCONCEPTION]
+                + [(c, "missing") for c in self.key.concept_ids if status[c] == "missing"])
+
+    def pick_loop_questions(self, session_id: str, n: int = 3) -> tuple[list[dict], int | None]:
+        """Up to n questions: just taught concepts first, then weakest concepts, then fill in exam order."""
+        questions = self.repo.list_questions()
+        lectures = self.repo.list_lectures(session_id)
+        lecture_id = lectures[-1]["id"] if lectures else None
+        just_taught = {e["concept_id"] for e in self.repo.list_entries(session_id, confirmed_only=True)
+                       if e["sentence"]["lecture_id"] == lecture_id}
+        ordered = [q for q in questions if just_taught & set(q["required_concepts"])]
+        for cid, _ in self.weak_concepts(session_id):
+            ordered += [q for q in questions if cid in q["required_concepts"]]
+        ordered += questions
+        picked, seen = [], set()
+        for q in ordered:
+            if q["id"] not in seen:
+                seen.add(q["id"])
+                picked.append(q)
+        return picked[:n], lecture_id
+
+    def loop_quiz(self, session_id: str) -> dict:
+        questions, lecture_id = self.pick_loop_questions(session_id)
+        results = grade_exam(questions, self.active_notebook(session_id))
+        self._attach_lines(questions, results)
+        score, total = sum(r["is_correct"] for r in results), len(results)
+        passed = total > 0 and score == total
+        concept_ids = [c for c in self.key.concept_ids if any(c in q["required_concepts"] for q in questions)]
+        round_id = self.repo.add_round(session_id, self.clock().isoformat(timespec="seconds"), lecture_id,
+                                       score, total, passed, concept_ids)
+        return {
+            "round_id": round_id, "score": score, "total": total, "passed": passed,
+            "mood": "proud" if passed else "confused",
+            "result_line": persona.result_line(score, total),
+            "results": results,
+            "streak": self._streaks(session_id)[0],
+        }
+
+    def _streaks(self, session_id: str) -> tuple[int, int]:
+        """(current, best) from the calendar days that have at least one passed round."""
+        days = {_day(r) for r in self.repo.list_rounds(session_id) if r["passed"]}
+        return current_streak(days, self.clock().date()), best_streak(days)
+
+    def loop_today(self, session_id: str) -> dict:
+        today = self.clock().date()
+        rounds = self.repo.list_rounds(session_id)
+        streak, best = self._streaks(session_id)
+        last = rounds[-1] if rounds else None
+        days_since = (today - _day(last)).days if last else None
+
+        if days_since is not None and days_since >= 2:
+            mood = "sad"
+        elif last and not last["passed"]:
+            mood = "confused"
+        elif any(r["passed"] and _day(r) == today for r in rounds):
+            mood = "proud"
+        else:
+            mood = "listening"
+
+        weak = self.weak_concepts(session_id)
+        if weak:
+            ask_id, reason = weak[0]
+        else:  # everything taught right: review the concept rounds covered least recently (never covered first)
+            last_seen = {c: r["id"] for r in rounds for c in r["concept_ids"]}
+            ask_id = min(self.key.concept_ids, key=lambda c: (last_seen.get(c, 0), self.key.concept_ids.index(c)))
+            reason = "review"
+        label = self.key.label(ask_id)
+
+        active = self.active_notebook(session_id)
+        mastered = sum(concept_status(active, c) == CORRECT for c in self.key.concept_ids)
+        return {
+            "streak": streak, "best_streak": best,
+            "last_round_at": last["created_at"] if last else None,
+            "days_since_last": days_since,
+            "mood": mood,
+            "ask": {"concept_id": ask_id, "label": label, "reason": reason},
+            "line": persona.greeting(mood, streak, label, days_missed=(days_since or 1) - 1),
+            "progress": {"mastered": mastered, "total": len(self.key.concept_ids)},
+            "level": level_for(mastered),
         }
 
     # 10. Office hours: only the concepts the AI student failed on
@@ -223,6 +317,41 @@ class ReetaService:
             "passed": bool(last and last["score"] >= self.pass_threshold * total),
             "lectures": len(self.repo.list_lectures(session_id)),
         }
+
+
+def _day(round_row: dict) -> date:
+    return datetime.fromisoformat(round_row["created_at"]).date()
+
+
+def current_streak(days: set[date], today: date) -> int:
+    """Consecutive days with a passed round, ending today or yesterday (a streak survives until tonight)."""
+    day = today if today in days else today - timedelta(days=1)
+    n = 0
+    while day in days:
+        n, day = n + 1, day - timedelta(days=1)
+    return n
+
+
+def best_streak(days: set[date]) -> int:
+    best = 0
+    for d in days:
+        if d - timedelta(days=1) not in days:  # start of a run
+            n = 1
+            while d + timedelta(days=n) in days:
+                n += 1
+            best = max(best, n)
+    return best
+
+
+def level_for(mastered: int) -> str:
+    """Freshman 0 to 1 mastered, Sophomore 2, Junior 3 to 4, Graduate 5."""
+    if mastered >= 5:
+        return "Graduate"
+    if mastered >= 3:
+        return "Junior"
+    if mastered == 2:
+        return "Sophomore"
+    return "Freshman"
 
 
 def _clean_client_sentences(raw: list[dict]) -> list[dict]:

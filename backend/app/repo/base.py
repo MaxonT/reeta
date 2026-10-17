@@ -46,6 +46,15 @@ class Repository(ABC):
     def list_attempts(self, session_id: str) -> list[dict]:
         """Attempts with their `answers`, oldest first."""
 
+    # Daily loop (short quiz rounds that drive the streak)
+    @abstractmethod
+    def add_round(self, session_id: str, created_at: str, lecture_id: int | None, score: int, total: int,
+                  passed: bool, concept_ids: list[str]) -> int:
+        """-> round id. created_at is an ISO 8601 timestamp."""
+    @abstractmethod
+    def list_rounds(self, session_id: str) -> list[dict]:
+        """Rounds oldest first: {id, session_id, created_at, lecture_id, score, total, passed (bool), concept_ids}."""
+
     @abstractmethod
     def reset_session(self, session_id: str) -> None: ...
 
