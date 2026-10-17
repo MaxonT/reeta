@@ -11,6 +11,50 @@ re teach by voice, and the AI student retakes the Exam until it passes. The **Re
 **Notebook**. LLMs only (1) map Lecture sentences to concepts and (2) phrase the AI student's replies.
 
 Team workflow (branches, PRs, no conflicts): see [CONTRIBUTING.md](CONTRIBUTING.md).
+How each half works inside: [backend/README.md](backend/README.md) and [frontend/README.md](frontend/README.md).
+
+## How the frontend and backend connect
+
+Two processes, one HTTP contract. The browser never holds an API key and never decides an answer.
+
+```
+ Browser  http://localhost:5173                 Vite dev server              FastAPI  http://localhost:8000
+ ┌──────────────────────────────┐               ┌──────────────┐             ┌──────────────────────────────┐
+ │ scenes/*.jsx                 │               │ proxy        │             │ main.py      routes          │
+ │   │ props + callbacks         │  fetch        │ /api/* ──▶   │  HTTP       │   │                          │
+ │ App.jsx   shared state       │──/api/...────▶│ strips /api  │────────────▶│ service.py   game rules      │
+ │   │                          │  X-Session-Id │ (vite.config)│             │   ├ grading.py (no LLM)      │
+ │ lib/api.js  only fetch caller│◀──── JSON ────│              │◀────────────│   ├ speech/  llm/  repo/     │
+ │ lib/clip.js audio for replay │◀── audio file─│              │◀────────────│   └ SQLite backend/data/     │
+ └──────────────────────────────┘               └──────────────┘             └──────────────────────────────┘
+```
+
+1. **One door on each side.** In the browser, only `frontend/src/lib/api.js` (and `clip.js` for audio) calls
+   the backend. On the server, only `backend/app/main.py` defines routes. To add a feature that crosses the
+   line, add a route in `main.py` (logic in `service.py`) and one matching function in `api.js`.
+2. **The proxy.** The frontend calls `/api/notebook`; Vite forwards it to `http://localhost:8000/notebook`
+   (`frontend/vite.config.js`). Same origin for the browser, so no CORS trouble and no backend URL in the code.
+   Use `VITE_API_TARGET` to point at a backend elsewhere.
+3. **Session.** Every request carries `X-Session-Id` (from `localStorage`, default `demo`). The backend scopes
+   Lectures, Notebook entries and Exam attempts to it.
+4. **The shared vocabulary is the concept id** (`self_call`, `base_case`, ...) from `content/answer_key.json`.
+   The backend returns it in entries and Exam results; the frontend uses it to color and highlight nodes in
+   `ConceptMap.jsx`. Sentence ids, `lecture_id`, `start_ms` and `end_ms` link a wrong answer back to the
+   Professor's own words and audio.
+
+One full loop, request by request:
+
+| Step | Frontend | Request | Backend | Returns |
+|------|----------|---------|---------|---------|
+| Teach | `TeachPanel` | `POST /lectures/audio` (audio + browser transcript) | transcribe, split into timed sentences, map to concepts | sentences + proposed entries |
+| Confirm | `TeachPanel` | `POST /lectures/{id}/confirm` | write entries to the Notebook, supersede old ones | Notebook |
+| Look | `NotebookScene` | (state from App) | | |
+| Exam | `ExamRoom` | `POST /exam/take` | `grading.py` over the Notebook, then phrase lines | results with citations + timestamps |
+| Red pen | `Grading` | `GET /lectures/{id}/audio` | serve the saved recording | audio file, played from `start_ms` to `end_ms` |
+| Re teach | `OfficeHours` | `GET /office-hours`, then Teach + Confirm again (`kind=office_hours`) | failed concepts only | AI student's questions |
+| Grade | `ReportCard` | `GET /report` | per concept grade from history | Report |
+
+Full endpoint list in [API](#api).
 
 ## Architecture
 
