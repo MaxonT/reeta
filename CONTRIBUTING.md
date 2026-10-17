@@ -10,10 +10,11 @@ Most conflicts come from two people editing the same file. Stay in your lane, an
 
 | Area | Files | Owner |
 |------|-------|-------|
-| Backend logic | `backend/app/service.py`, `grading.py`, `main.py`, `backend/tests/` | _name_ |
-| Frontend scenes | `frontend/src/scenes/*`, `frontend/src/components/*` | _name_ |
-| Content | `content/answer_key.json`, `content/exam.json` | _name_ |
-| OCI / Oracle | `backend/app/speech/oci_speech.py`, `llm/oci_genai.py`, `repo/oracle_repo.py` | _name_ |
+| Backend logic | `backend/app/service.py`, `grading.py`, `main.py`, `backend/tests/` | _TBD_ |
+| Frontend scenes and design | `frontend/src/scenes/*`, `frontend/src/components/*`, `frontend/src/styles.css` | **O-Senbore** (Semi) |
+| Content | `content/answer_key.json`, `content/exam.json` | _TBD_ |
+| OCI / Oracle | `backend/app/speech/oci_speech.py`, `llm/oci_genai.py`, `repo/oracle_repo.py` | **gogbonna** (Godswill) |
+| Searchable knowledge graph | `GET /notebook/search` route + service method, concept edges in `content/answer_key.json`, edges in `frontend/src/components/ConceptMap.jsx` (coordinate with Semi) | **bowale-os** (Daniel) |
 
 Shared hot files: `frontend/src/App.jsx`, `frontend/src/styles.css`, `backend/app/main.py`, `README.md`.
 Post "editing App.jsx" in chat first, keep the change small, merge fast. Prefer new code in a new file.
