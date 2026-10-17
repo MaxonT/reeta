@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import { api } from './lib/api.js'
 import LectureHall from './scenes/LectureHall.jsx'
 import NotebookScene from './scenes/NotebookScene.jsx'
@@ -39,6 +39,7 @@ export default function App() {
 
   const props = { answerKey, notebook, lectures, exam, setExam, onConfirmed, retake, go: setScene, onReset: reset }
   return (
+    <MotionConfig reducedMotion="user">
     <div className="app">
       <header>
         <div className="logo">Reeta <span>teach the AI student</span></div>
@@ -61,5 +62,6 @@ export default function App() {
         </motion.main>
       </AnimatePresence>
     </div>
+    </MotionConfig>
   )
 }
