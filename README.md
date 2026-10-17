@@ -10,6 +10,8 @@ re teach by voice, and the AI student retakes the Exam until it passes. The **Re
 **Hard rule:** the AI student never uses an LLM's built in knowledge. Grading is deterministic code over the
 **Notebook**. LLMs only (1) map Lecture sentences to concepts and (2) phrase the AI student's replies.
 
+Team workflow (branches, PRs, no conflicts): see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Architecture
 
 ```
