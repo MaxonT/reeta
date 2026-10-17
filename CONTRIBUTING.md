@@ -4,6 +4,8 @@ Goal: `main` always runs end to end, and nobody loses time to merge conflicts.
 
 ## 1. Who owns what
 
+Repo lead: **MaxonT** (Tiger). Merges questions, branch protection, the `demo-ready` tag.
+
 Most conflicts come from two people editing the same file. Stay in your lane, and say so in chat before touching someone else's.
 
 | Area | Files | Owner |
