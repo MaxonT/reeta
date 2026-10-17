@@ -1,5 +1,7 @@
 // All calls go through the Vite proxy (/api -> backend). Keys never reach the browser.
-const SESSION = localStorage.getItem('reeta_session') || 'demo'
+import { quizFallback, todayFallback, normalizeQuiz, normalizeToday } from './loopFallback.js'
+
+export const SESSION = (() => { try { return localStorage.getItem('reeta_session') || 'demo' } catch { return 'demo' } })()
 
 async function req(method, path, body) {
   const opts = { method, headers: { 'X-Session-Id': SESSION } }
@@ -33,4 +35,24 @@ export const api = {
   report: () => req('GET', '/report'),
   reset: () => req('POST', '/session/reset'),
   audioUrl: (lectureId) => `/api/lectures/${lectureId}/audio`,
+
+  // Daily loop. The /loop endpoints come from a parallel backend PR. Until they exist (or if they fail),
+  // both fall back to the endpoints above so the loop always works.
+  // opts: { lecture_id, concept_ids } of the lecture just taught, used to pick today's questions.
+  loopQuiz: async (opts = {}) => {
+    try {
+      return normalizeQuiz(await req('POST', '/loop/quiz', opts))
+    } catch (e) {
+      console.warn('[loop] /loop/quiz unavailable, using /exam/take fallback:', e.message)
+      return quizFallback(api, opts)
+    }
+  },
+  loopToday: async () => {
+    try {
+      return normalizeToday(await req('GET', '/loop/today'))
+    } catch (e) {
+      console.warn('[loop] /loop/today unavailable, computing from /notebook:', e.message)
+      return todayFallback(api)
+    }
+  },
 }
