@@ -1,0 +1,145 @@
+{
+  "draft": true,
+  "review_note": "DRAFT for content teammate review. correct_answer and every distractor_map value must match an option string exactly. distractor_map keys are misconception ids from answer_key.json.",
+  "questions": [
+    {
+      "id": "q1",
+      "type": "true_false",
+      "prompt": "A Python function is allowed to call itself.",
+      "options": ["True", "False"],
+      "correct_answer": "True",
+      "required_concepts": ["self_call"],
+      "distractor_map": {}
+    },
+    {
+      "id": "q2",
+      "type": "mcq",
+      "prompt": "What happens when a recursive function has no base case?",
+      "options": [
+        "It keeps calling itself until Python raises RecursionError",
+        "It stops by itself once the work is done",
+        "Nothing bad, base cases are optional",
+        "It returns None right away"
+      ],
+      "correct_answer": "It keeps calling itself until Python raises RecursionError",
+      "required_concepts": ["base_case"],
+      "distractor_map": {
+        "base_case_stops_itself": "It stops by itself once the work is done",
+        "base_case_not_needed": "Nothing bad, base cases are optional"
+      }
+    },
+    {
+      "id": "q3",
+      "type": "true_false",
+      "prompt": "Every recursive function needs a base case.",
+      "options": ["True", "False"],
+      "correct_answer": "True",
+      "required_concepts": ["base_case"],
+      "distractor_map": {
+        "base_case_stops_itself": "False",
+        "base_case_not_needed": "False"
+      }
+    },
+    {
+      "id": "q4",
+      "type": "mcq",
+      "prompt": "def countdown(n):\n    if n == 0:\n        return\n    print(n)\n    countdown(n)\n\nWhat is wrong with countdown(3)?",
+      "options": [
+        "The recursive call never gets closer to the base case",
+        "Nothing, recursion stops by itself",
+        "A function cannot call itself",
+        "print is not allowed inside recursion"
+      ],
+      "correct_answer": "The recursive call never gets closer to the base case",
+      "required_concepts": ["base_case", "smaller_problem"],
+      "distractor_map": {
+        "base_case_stops_itself": "Nothing, recursion stops by itself",
+        "base_case_not_needed": "Nothing, recursion stops by itself"
+      }
+    },
+    {
+      "id": "q5",
+      "type": "mcq",
+      "prompt": "def factorial(n):\n    if n <= 1:\n        return 1\n    return n * ______\n\nWhich call fills the blank?",
+      "options": [
+        "factorial(n - 1)",
+        "factorial(n)",
+        "factorial(n + 1)",
+        "factorial(0)"
+      ],
+      "correct_answer": "factorial(n - 1)",
+      "required_concepts": ["self_call", "smaller_problem"],
+      "distractor_map": {}
+    },
+    {
+      "id": "q6",
+      "type": "true_false",
+      "prompt": "When f(3) calls f(2), both calls share the same local variable n.",
+      "options": ["True", "False"],
+      "correct_answer": "False",
+      "required_concepts": ["independent_frames"],
+      "distractor_map": {
+        "frames_shared_variables": "True"
+      }
+    },
+    {
+      "id": "q7",
+      "type": "mcq",
+      "prompt": "def f(n):\n    x = n * 2\n    if n == 0:\n        return 0\n    f(n - 1)\n    return x\n\nWhat does f(2) return?",
+      "options": [
+        "4, because the f(2) call keeps its own x",
+        "0, because the inner calls overwrote x",
+        "2",
+        "It never returns"
+      ],
+      "correct_answer": "4, because the f(2) call keeps its own x",
+      "required_concepts": ["independent_frames", "base_case"],
+      "distractor_map": {
+        "frames_shared_variables": "0, because the inner calls overwrote x",
+        "base_case_stops_itself": "It never returns",
+        "base_case_not_needed": "It never returns"
+      }
+    },
+    {
+      "id": "q8",
+      "type": "mcq",
+      "prompt": "def sum_to(n):\n    if n == 0:\n        return 0\n    return n + sum_to(n - 1)\n\nWhat does sum_to(3) return?",
+      "options": ["6", "0", "3", "It never returns"],
+      "correct_answer": "6",
+      "required_concepts": ["base_case", "smaller_problem", "return_propagation"],
+      "distractor_map": {
+        "return_only_last": "0",
+        "base_case_stops_itself": "It never returns",
+        "base_case_not_needed": "It never returns"
+      }
+    },
+    {
+      "id": "q9",
+      "type": "true_false",
+      "prompt": "In recursion, only the deepest call's return value matters; the other return values are thrown away.",
+      "options": ["True", "False"],
+      "correct_answer": "False",
+      "required_concepts": ["return_propagation"],
+      "distractor_map": {
+        "return_only_last": "True"
+      }
+    },
+    {
+      "id": "q10",
+      "type": "mcq",
+      "prompt": "Why does Python raise RecursionError?",
+      "options": [
+        "The calls never reach a base case, so the call stack gets too deep",
+        "Python does not allow functions to call themselves",
+        "The function returned the wrong type",
+        "Recursion always raises it eventually"
+      ],
+      "correct_answer": "The calls never reach a base case, so the call stack gets too deep",
+      "required_concepts": ["self_call", "base_case", "smaller_problem"],
+      "distractor_map": {
+        "base_case_stops_itself": "Recursion always raises it eventually",
+        "base_case_not_needed": "Recursion always raises it eventually"
+      }
+    }
+  ]
+}

@@ -1,0 +1,183 @@
+{
+  "draft": true,
+  "review_note": "DRAFT for content teammate review. Concept and misconception ids are stable and referenced by exam.json and code; edit labels, synonyms and phrases freely, but do not rename ids without updating exam.json.",
+  "topic": "Python recursion",
+  "concepts": [
+    {
+      "id": "self_call",
+      "label": "Self call",
+      "description": "A function can call itself.",
+      "synonyms": [
+        "calls itself",
+        "call itself",
+        "calling itself",
+        "called itself",
+        "invokes itself",
+        "function calls itself",
+        "call the same function",
+        "calls the same function",
+        "itself inside"
+      ],
+      "student_question": "How can a function use itself? Can a function even call itself?",
+      "misconceptions": []
+    },
+    {
+      "id": "base_case",
+      "label": "Base case",
+      "description": "Recursion needs a stopping condition, otherwise it recurses forever and Python raises RecursionError.",
+      "synonyms": [
+        "base case",
+        "stopping condition",
+        "stop condition",
+        "stopping point",
+        "when to stop",
+        "needs to stop",
+        "has to stop",
+        "must stop",
+        "recursionerror",
+        "recursion error",
+        "infinite recursion",
+        "terminating condition",
+        "termination condition"
+      ],
+      "student_question": "How does a recursive function know when to stop?",
+      "misconceptions": [
+        {
+          "id": "base_case_stops_itself",
+          "description": "Recursion stops by itself.",
+          "phrases": [
+            "stops by itself",
+            "stop by itself",
+            "stops on its own",
+            "stop on its own",
+            "stops automatically",
+            "stop automatically",
+            "ends by itself",
+            "ends on its own",
+            "python stops it for you",
+            "knows when to stop"
+          ]
+        },
+        {
+          "id": "base_case_not_needed",
+          "description": "You don't need a base case.",
+          "phrases": [
+            "don't need a base case",
+            "do not need a base case",
+            "dont need a base case",
+            "no need for a base case",
+            "base case is optional",
+            "base cases are optional",
+            "base case isn't needed",
+            "base case is not needed",
+            "doesn't need a base case",
+            "does not need a base case",
+            "without a base case is fine",
+            "never need a base case"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "smaller_problem",
+      "label": "Smaller problem",
+      "description": "Each recursive call must work on a smaller problem that moves toward the base case.",
+      "synonyms": [
+        "smaller problem",
+        "smaller input",
+        "smaller version",
+        "smaller number",
+        "smaller piece",
+        "simpler problem",
+        "simpler version",
+        "closer to the base case",
+        "toward the base case",
+        "towards the base case",
+        "n minus 1",
+        "n minus one",
+        "n - 1",
+        "n-1",
+        "shrink",
+        "make progress"
+      ],
+      "student_question": "What should I pass into the next call? Does it matter what input it gets?",
+      "misconceptions": []
+    },
+    {
+      "id": "independent_frames",
+      "label": "Independent frames",
+      "description": "Each call has its own local variables in its own stack frame.",
+      "synonyms": [
+        "stack frame",
+        "own frame",
+        "own local variables",
+        "its own variables",
+        "own copy",
+        "own variables",
+        "separate variables",
+        "separate copy",
+        "local variables",
+        "call stack"
+      ],
+      "student_question": "When the function calls itself, what happens to its variables? Do the calls share them?",
+      "misconceptions": [
+        {
+          "id": "frames_shared_variables",
+          "description": "All calls share the same variables.",
+          "phrases": [
+            "share the same variables",
+            "share the same variable",
+            "share variables",
+            "same variables",
+            "same variable",
+            "variables are shared",
+            "shared variables",
+            "overwrite the variables",
+            "overwrites the variables",
+            "one copy of the variables"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "return_propagation",
+      "label": "Return propagation",
+      "description": "Return values pass back up through each caller.",
+      "synonyms": [
+        "passes back up",
+        "pass back up",
+        "passed back up",
+        "back up to the caller",
+        "back to the caller",
+        "returned to the caller",
+        "returns to the caller",
+        "return value goes back",
+        "returns back",
+        "bubble up",
+        "bubbles up",
+        "unwind",
+        "unwinds",
+        "combine the results",
+        "combines the result"
+      ],
+      "student_question": "After the deepest call returns, what happens to that value?",
+      "misconceptions": [
+        {
+          "id": "return_only_last",
+          "description": "Only the last call's return value matters.",
+          "phrases": [
+            "only the last call",
+            "only the last return",
+            "only the final call",
+            "only the deepest call",
+            "last call's return",
+            "other returns don't matter",
+            "other return values don't matter",
+            "other returns are thrown away",
+            "thrown away"
+          ]
+        }
+      ]
+    }
+  ]
+}
