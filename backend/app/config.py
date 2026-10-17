@@ -11,6 +11,8 @@ load_dotenv(REPO_ROOT / "backend" / ".env")
 
 
 def _path(value: str) -> Path:
+    if value == ":memory:":
+        return Path(value)
     p = Path(value).expanduser()
     return p if p.is_absolute() else REPO_ROOT / p
 

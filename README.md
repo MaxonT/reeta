@@ -111,6 +111,19 @@ Use Chrome for the demo (MediaRecorder + Web Speech API). Session is the `X-Sess
 | POST   | `/session/reset`             | wipe the session                                              |
 | GET    | `/answer-key`                | concept labels for the UI (no answers)                        |
 
+## Status
+
+| Milestone | State |
+|-----------|-------|
+| 1. Scaffold, README, `.env.example`, `.gitignore` | done |
+| 2. Backend: Whisper + MockLLMClient + SQLite + grading, pytest | done, 14 tests |
+| 3. Frontend scenes wired to the API (static first) | done, all 6 scenes |
+| 4. Linked highlight + audio clip replay | done (Web Audio decode, plays `[start_ms, end_ms]`) |
+| 5. OCI / Oracle stubs with TODOs | done: `speech/oci_speech.py`, `llm/oci_genai.py`, `repo/oracle_repo.py` |
+
+Browser smoke test of the whole loop: `python scripts/e2e_smoke.py` (backend with `SPEECH_PROVIDER=browser`
+on :8000, `npm run dev` on :5173). Not yet verified against a real OpenAI key or a real microphone in this repo's CI.
+
 ## Demo script (2 min)
 
 1. Lecture: "A recursive function is a function that calls itself. Recursion stops by itself. All the calls share the same variables."
