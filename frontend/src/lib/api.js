@@ -16,6 +16,8 @@ async function req(method, path, body) {
 export const api = {
   answerKey: () => req('GET', '/answer-key'),
   notebook: () => req('GET', '/notebook'),
+  searchNotebook: (q = '', conceptId) => req('GET', `/notebook/search?q=${encodeURIComponent(q)}${conceptId ? `&concept_id=${encodeURIComponent(conceptId)}` : ''}`),
+  conceptEdges: () => req('GET', '/concepts/edges'),
   lectures: () => req('GET', '/lectures'),
   postLecture: ({ blob, kind, sentences, text }) => {
     const fd = new FormData()

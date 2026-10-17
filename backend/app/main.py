@@ -19,7 +19,7 @@ from .speech.base import get_speech_client
 def build_service() -> ReetaService:
     key = load_answer_key(settings.content_dir)
     repo = get_repository(settings.db_provider)
-    repo.seed_content(key.concepts, load_exam(settings.content_dir, key))
+    repo.seed_content(key.concepts, load_exam(settings.content_dir, key), key.edges)
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
                         key, settings.audio_dir, settings.pass_threshold)
 
@@ -98,6 +98,16 @@ def lecture_audio(lecture_id: int):
 @app.get("/notebook")
 def notebook(session_id: str = Session):
     return svc.notebook(session_id)
+
+
+@app.get("/notebook/search")
+def notebook_search(q: str = "", concept_id: str | None = None, session_id: str = Session):
+    return {"q": q, "concept_id": concept_id, "results": svc.search_notebook(session_id, q, concept_id)}
+
+
+@app.get("/concepts/edges")
+def concept_edges():
+    return {"edges": [list(e) for e in svc.repo.list_edges()]}
 
 
 @app.post("/exam/take")

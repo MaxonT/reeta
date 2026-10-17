@@ -4,7 +4,11 @@ from abc import ABC, abstractmethod
 
 class Repository(ABC):
     @abstractmethod
-    def seed_content(self, concepts: list[dict], questions: list[dict]) -> None: ...
+    def seed_content(self, concepts: list[dict], questions: list[dict],
+                     edges: list[tuple[str, str]] | None = None) -> None: ...
+    @abstractmethod
+    def list_edges(self) -> list[tuple[str, str]]:
+        """Concept edges as (source_id, target_id), in seed order."""
 
     # Lectures and sentences
     @abstractmethod
