@@ -74,7 +74,8 @@ export default function TeachPanel({ kind = 'lecture', answerKey, onConfirmed, o
 
   return (
     <div className="chalkboard">
-      <div className="board-title">{kind === 'office_hours' ? 'Office hours' : 'Today’s Lecture: Python recursion'}</div>
+      <div className="tiny">Today’s lesson · Python recursion</div>
+      <div className="board-title">{kind === 'office_hours' ? 'Office hours' : 'Today’s Lecture'}</div>
       {prompt && <div className="chalk dim">{prompt}</div>}
 
       {phase !== 'confirming' && (
@@ -148,6 +149,8 @@ export default function TeachPanel({ kind = 'lecture', answerKey, onConfirmed, o
         </div>
       )}
       {error && <div className="chalk small warn">{error}</div>}
+      <div className="board-dust" aria-hidden="true" />
+      <div className="board-tray" aria-hidden="true"><span className="chalk-stick" /><span className="eraser" /></div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import ConceptMap from '../components/ConceptMap.jsx'
+import AIStudent from '../components/AIStudent.jsx'
 import { playClip, stopClip } from '../lib/clip.js'
 
 // Red pen: clicking a wrong answer lights up the question, the Notebook node and the
@@ -37,6 +38,11 @@ export default function Grading({ exam, notebook, lectures, answerKey, go }) {
 
   return (
     <div className="scene grading">
+      <div className="scene-head">
+        <div className="tiny">04 / Red pen</div>
+        <h1>Follow the mistake back to the lesson.</h1>
+        <p>Question, concept, your exact words. Select a red mark to trace it.</p>
+      </div>
       <div className="exam-paper graded">
         <div className="paper-title">Exam, attempt {exam.attempt_no}
           <motion.span className="score" initial={{ scale: 2, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}>{exam.score}/{exam.total}</motion.span>
@@ -50,6 +56,7 @@ export default function Grading({ exam, notebook, lectures, answerKey, go }) {
               <motion.div className="red-note" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
                 {r.reason === 'misconception' && <>You taught a wrong idea about <b>{r.concept_ids.map(label).join(', ')}</b>.</>}
                 {r.reason === 'not_taught' && <>You never taught <b>{r.missing_concepts.map(label).join(', ')}</b>.</>}
+                {r.reason === 'not_taught' && !r.sentence_ids.length && <div className="missing-src">Not covered in your lecture.</div>}
                 {r.reason === 'correct' && <>Correct, using what you taught about {r.concept_ids.map(label).join(', ')}.</>}
                 <div className="hand">“{r.line}”</div>
               </motion.div>
@@ -63,6 +70,10 @@ export default function Grading({ exam, notebook, lectures, answerKey, go }) {
       </div>
 
       <div className="side">
+        <div className="grading-student">
+          <AIStudent expression={selected && !selected.is_correct ? 'confused' : 'listening'} size={96} />
+        </div>
+        <div className="tiny">Linked concept</div>
         <ConceptMap concepts={notebook?.concepts || []} highlight={hlConcepts} height={320} />
         <div className="transcript">
           <div className="paper-title small">What you said</div>
