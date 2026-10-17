@@ -11,7 +11,7 @@ Most conflicts come from two people editing the same file. Stay in your lane, an
 | Area | Files | Owner |
 |------|-------|-------|
 | Backend logic | `backend/app/service.py`, `grading.py`, `main.py`, `backend/tests/` | **bowale-os** (Daniel) |
-| Frontend scenes and design | `frontend/src/scenes/*`, `frontend/src/components/*`, `frontend/src/styles.css` | **O-Senbore** (Semi) |
+| Frontend scenes and design | `frontend/src/scenes/*`, `frontend/src/components/*`, `frontend/src/styles.css` | **O-Senbore** (Semi), **D4nI3l-oa** (split scenes between you, say who takes which in chat) |
 | Content | `content/answer_key.json`, `content/exam.json` | _TBD_ |
 | OCI / Oracle | `backend/app/speech/oci_speech.py`, `llm/oci_genai.py`, `repo/oracle_repo.py` | **gogbonna** (Godswill) |
 | Searchable knowledge graph | `GET /notebook/search` route + service method, concept edges in `content/answer_key.json`, edges in `frontend/src/components/ConceptMap.jsx` (coordinate with Semi) | **bowale-os** (Daniel) |
