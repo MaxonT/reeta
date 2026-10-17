@@ -61,6 +61,35 @@ Providers are chosen with env vars, so OCI plugs in without touching business lo
 If server transcription fails (no key, network), the backend uses the transcript the browser sent from the Web
 Speech API. If that is missing too, the Lecture can be typed. `openai` and `oci` LLM clients fall back to the Mock.
 
+## Where the knowledge map lives
+
+The knowledge map is the **Notebook**: what the AI student knows, per concept, with a pointer back to the exact
+sentence (and audio span) the Professor said. It is stored in SQLite (`backend/data/reeta.db`, schema in
+`backend/app/repo/schema.sql`), behind the `Repository` interface so Oracle can replace it.
+
+```
+concepts (5 rows, seeded from content/answer_key.json)      misconceptions (seeded, linked to a concept)
+    ▲                                                           ▲
+    │ concept_id                                                │ misconception_id
+notebook_entries  id, session_id, concept_id, status (correct | misconception), misconception_id,
+                  sentence_id, confirmed (Professor checked it), superseded_by (newer entry for same concept)
+    │ sentence_id
+    ▼
+sentences         id, lecture_id, idx, text, start_ms, end_ms
+    │ lecture_id
+    ▼
+lectures          id, session_id, kind (lecture | office_hours), audio_path, text
+```
+
+1. **Current knowledge** = for each concept, the confirmed entry with `superseded_by IS NULL`
+   (`ReetaService.active_notebook`). Missing concept = no such entry.
+2. **History** is never deleted: re teaching in Office hours adds a new entry and points the old one at it.
+3. **Read it**: `GET /notebook` returns every confirmed entry (with sentence text and timestamps) plus a per
+   concept status. `GET /lectures` returns every sentence. The frontend draws the 5 nodes from `/notebook`;
+   the edges between nodes are currently a fixed layout in `frontend/src/components/ConceptMap.jsx`.
+4. **Not built yet**: a search endpoint (e.g. `GET /notebook/search?q=`) and storing concept edges in
+   `content/answer_key.json`. Both are small additions on top of the tables above.
+
 ## Repo layout
 
 ```
