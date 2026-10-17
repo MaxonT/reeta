@@ -8,6 +8,11 @@ CREATE TABLE IF NOT EXISTS misconceptions (
     concept_id TEXT NOT NULL REFERENCES concepts(id),
     description TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS concept_edges (
+    source_id TEXT NOT NULL REFERENCES concepts(id),
+    target_id TEXT NOT NULL REFERENCES concepts(id),
+    PRIMARY KEY (source_id, target_id)
+);
 CREATE TABLE IF NOT EXISTS lectures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,

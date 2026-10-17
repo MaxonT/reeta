@@ -21,7 +21,7 @@ def questions(key):
 @pytest.fixture
 def svc(key, questions, tmp_path):
     repo = SQLiteRepository(":memory:")
-    repo.seed_content(key.concepts, questions)
+    repo.seed_content(key.concepts, questions, key.edges)
     return ReetaService(repo, BrowserSpeechClient(), MockLLMClient(), key, tmp_path / "audio")
 
 

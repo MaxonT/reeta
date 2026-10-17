@@ -18,6 +18,6 @@ def _todo(*_a, **_k):
 
 
 class OracleRepository(Repository):
-    seed_content = create_lecture = update_lecture = get_lecture = list_lectures = _todo
+    seed_content = list_edges = create_lecture = update_lecture = get_lecture = list_lectures = _todo
     add_sentences = add_entries = list_entries = update_entry = _todo
     list_questions = create_attempt = add_answers = list_attempts = reset_session = _todo

@@ -122,6 +122,34 @@ class ReetaService:
             ],
         }
 
+    def search_notebook(self, session_id: str, q: str = "", concept_id: str | None = None) -> list[dict]:
+        """Non superseded entries matching q (case insensitive on concept id, label, sentence text)."""
+        active = self.active_notebook(session_id)
+        edges = self.repo.list_edges()
+        needle = (q or "").strip().lower()
+        out = []
+        for e in self.repo.list_entries(session_id):
+            if e["superseded_by"] is not None:
+                continue
+            cid = e["concept_id"]
+            if concept_id and cid != concept_id:
+                continue
+            label = self.key.label(cid)
+            text = e["sentence"]["text"]
+            if needle and not any(needle in s.lower() for s in (cid, label, text)):
+                continue
+            neighbors = []
+            for s, t in edges:
+                other = t if s == cid else s if t == cid else None
+                if other and other not in [n["concept_id"] for n in neighbors]:
+                    neighbors.append({"concept_id": other, "status": concept_status(active, other)})
+            out.append({"entry_id": e["id"], "concept_id": cid, "label": label, "status": e["status"],
+                        "misconception_id": e["misconception_id"], "confirmed": e["confirmed"],
+                        "sentence_id": e["sentence_id"], "text": text,
+                        "start_ms": e["sentence"]["start_ms"], "end_ms": e["sentence"]["end_ms"],
+                        "neighbors": neighbors})
+        return out
+
     # 7-9. Grade with code, phrase, return linked data
     def take_exam(self, session_id: str) -> dict:
         questions = self.repo.list_questions()

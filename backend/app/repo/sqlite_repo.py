@@ -27,7 +27,7 @@ class SQLiteRepository(Repository):
         with self.lock, self.conn:
             return self.conn.execute(sql, args).lastrowid
 
-    def seed_content(self, concepts, questions):
+    def seed_content(self, concepts, questions, edges=None):
         with self.lock, self.conn:
             for c in concepts:
                 self.conn.execute("INSERT OR REPLACE INTO concepts VALUES (?,?,?)",
@@ -35,11 +35,18 @@ class SQLiteRepository(Repository):
                 for m in c.get("misconceptions", []):
                     self.conn.execute("INSERT OR REPLACE INTO misconceptions VALUES (?,?,?)",
                                       (m["id"], c["id"], m["description"]))
+            if edges is not None:
+                self.conn.execute("DELETE FROM concept_edges")
+                for s, t in edges:
+                    self.conn.execute("INSERT OR IGNORE INTO concept_edges VALUES (?,?)", (s, t))
             for q in questions:
                 self.conn.execute(
                     "INSERT OR REPLACE INTO exam_questions VALUES (?,?,?,?,?,?,?)",
                     (q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"],
                      json.dumps(q["required_concepts"]), json.dumps(q.get("distractor_map", {}))))
+
+    def list_edges(self):
+        return [(r["source_id"], r["target_id"]) for r in self._q("SELECT * FROM concept_edges ORDER BY rowid")]
 
     # Lectures
     def create_lecture(self, session_id, kind, text):
