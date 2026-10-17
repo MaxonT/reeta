@@ -101,3 +101,18 @@ The Notebook tables and how "current knowledge" is computed are described in the
 2. `test_notebook.py`: confirm, supersede, office hours, mock extraction, sentence timestamps
 
 Add a test whenever you change `grading.py` or `service.py`.
+
+## Running on OCI GenAI
+
+Set `LLM_PROVIDER=oci` to use Cohere Command A on Oracle OCI Generative AI (us-chicago-1). Mock stays the default,
+and any OCI error falls back to the Mock. Auth comes from `~/.oci/config`.
+
+| Variable | Default |
+| --- | --- |
+| `OCI_COMPARTMENT_ID` | required (falls back to the tenancy in the config) |
+| `OCI_PROFILE` | `DEFAULT` |
+| `OCI_CONFIG_FILE` | `~/.oci/config` |
+| `OCI_GENAI_MODEL` | `cohere.command-a-03-2025` |
+| `OCI_GENAI_ENDPOINT` | `https://inference.generativeai.us-chicago-1.oci.oraclecloud.com` |
+
+Extraction output is always checked by `validate_entries` against the Answer key, same as the OpenAI client.
