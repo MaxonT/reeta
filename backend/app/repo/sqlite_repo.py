@@ -145,9 +145,24 @@ class SQLiteRepository(Repository):
             at["answers"] = answers
         return attempts
 
+    # Daily loop
+    def add_round(self, session_id, created_at, lecture_id, score, total, passed, concept_ids):
+        return self._x(
+            "INSERT INTO loop_rounds (session_id, created_at, lecture_id, score, total, passed, concept_ids) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (session_id, created_at, lecture_id, score, total, int(bool(passed)), json.dumps(list(concept_ids))))
+
+    def list_rounds(self, session_id):
+        rows = self._q("SELECT * FROM loop_rounds WHERE session_id=? ORDER BY id", (session_id,))
+        for r in rows:
+            r["passed"] = bool(r["passed"])
+            r["concept_ids"] = json.loads(r["concept_ids"])
+        return rows
+
     def reset_session(self, session_id):
         with self.lock, self.conn:
             c = self.conn
+            c.execute("DELETE FROM loop_rounds WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM exam_answers WHERE attempt_id IN (SELECT id FROM exam_attempts WHERE session_id=?)",
                       (session_id,))
             c.execute("DELETE FROM exam_attempts WHERE session_id=?", (session_id,))

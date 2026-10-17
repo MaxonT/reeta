@@ -65,3 +65,13 @@ CREATE TABLE IF NOT EXISTS exam_answers (
     sentence_ids TEXT NOT NULL,                    -- JSON list
     line TEXT                                      -- what the AI student said
 );
+CREATE TABLE IF NOT EXISTS loop_rounds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,                      -- ISO 8601, server local time
+    lecture_id INTEGER REFERENCES lectures(id),    -- latest lecture when the round was played, nullable
+    score INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    passed INTEGER NOT NULL,                       -- 1 when every question was correct
+    concept_ids TEXT NOT NULL                      -- JSON list of concepts the round covered
+);

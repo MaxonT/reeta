@@ -6,6 +6,7 @@ They never decide an answer. Grading lives in grading.py.
 from abc import ABC, abstractmethod
 
 from ..content import AnswerKey
+from ..persona import quiz_line
 
 VALID_STATUS = {"correct", "misconception"}
 
@@ -52,6 +53,26 @@ def template_phrase(result: dict, question: dict, key: AnswerKey) -> str:
     if result["reason"] == "misconception":
         return f"I'll go with “{result['answer']}”, because you told me “{quote}”"
     return f"“{result['answer']}”. You taught me “{quote}”"
+
+
+def phrase_payload(result: dict, question: dict, key: AnswerKey) -> dict:
+    """What the LLM sees when phrasing: the graded result plus Reeta's own deterministic line as a voice sample."""
+    return {
+        "question": question["prompt"],
+        "my_answer": result["answer"] or "I don't know",
+        "reason": result["reason"],
+        "professor_said": [c["text"] for c in result["citations"]],
+        "never_taught": [key.label(c) for c in result["missing_concepts"]],
+        "template": quiz_line(result, question, key),
+    }
+
+
+def checked_phrase(text: str | None, result: dict, question: dict, key: AnswerKey) -> str:
+    """Never trust the LLM line blindly: it must be non empty and keep the graded answer verbatim."""
+    text = (text or "").strip()
+    if not text or (result.get("answer") and result["answer"] not in text):
+        return quiz_line(result, question, key)
+    return text
 
 
 class FallbackLLMClient(LLMClient):

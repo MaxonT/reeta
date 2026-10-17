@@ -1,7 +1,7 @@
 """OCI Generative AI client (us-chicago-1, Cohere Command A).
 
-Uses the same prompts as openai_client.py and ALWAYS passes extraction output
-through validate_entries(). The `oci` package is imported lazily so tests and
+Uses the same prompts as openai_client.py (phrase() speaks in Reeta's persona, see
+persona.py) and ALWAYS passes extraction output through validate_entries(). The `oci` package is imported lazily so tests and
 mock mode run without it.
 
 Env: OCI_COMPARTMENT_ID (required), OCI_PROFILE (default DEFAULT),
@@ -13,7 +13,7 @@ import os
 import re
 
 from ..content import AnswerKey
-from .base import LLMClient, template_phrase, validate_entries
+from .base import LLMClient, checked_phrase, phrase_payload, validate_entries
 from .openai_client import EXTRACT_SYSTEM, PHRASE_SYSTEM
 
 DEFAULT_MODEL = "cohere.command-a-03-2025"
@@ -79,13 +79,6 @@ class OCIGenAIClient(LLMClient):
         return validate_entries(data.get("entries", []), sentences, key)
 
     def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
-        payload = {
-            "question": question["prompt"],
-            "my_answer": result["answer"] or "I don't know",
-            "reason": result["reason"],
-            "professor_said": [c["text"] for c in result["citations"]],
-            "never_taught": [key.label(c) for c in result["missing_concepts"]],
-            "template": template_phrase(result, question, key),
-        }
-        text = self._chat(PHRASE_SYSTEM, json.dumps(payload), temperature=0.7, max_tokens=80, json_mode=False)
-        return text.strip()
+        payload = phrase_payload(result, question, key)
+        text = self._chat(PHRASE_SYSTEM, json.dumps(payload), temperature=0.7, max_tokens=120, json_mode=False)
+        return checked_phrase(text, result, question, key)

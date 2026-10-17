@@ -2,7 +2,8 @@
 import re
 
 from ..content import AnswerKey
-from .base import LLMClient, template_phrase, validate_entries
+from ..persona import quiz_line
+from .base import LLMClient, validate_entries
 
 _NEGATION = re.compile(r"\b(not|never|no|don't|dont|doesn't|doesnt|isn't|isnt|aren't|won't|can't|cannot)\b")
 
@@ -49,4 +50,4 @@ class MockLLMClient(LLMClient):
         return None
 
     def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
-        return template_phrase(result, question, key)
+        return quiz_line(result, question, key)
