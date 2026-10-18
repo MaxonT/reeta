@@ -1,7 +1,7 @@
 # Reeta frontend
 
 React 18 + Vite single page app. The default view is the **daily loop**: phone sized screens (Home, Course
-notes, Teach, Quiz, Result) where you teach Reeta, the AI student, and watch her take a live 3 question exam.
+notes, Teach, Quiz, Result) where you teach Reeta, the AI student, and watch her take a live 5 question exam.
 The app holds no secrets and no game rules: every decision (what the questions are, what Reeta answers, which
 answers are right) comes from the backend over `/api`.
 
@@ -31,7 +31,7 @@ backend is not running, a banner tells you how to start it. Point the proxy at a
    Python recursion notes. Upload errors show the backend's own `detail` text.
 3. **Teach.** Hold the mic button (or Space) to talk, up to 60 seconds on the ring timer, or "Type instead".
    `POST /lectures/audio`, then Reeta shows what she wrote down (`lecture.text`). There is no confirm step.
-4. **Quiz.** The live exam, `POST /exam/run?questions=3`, read as Server-Sent Events with `fetch` (see
+4. **Quiz.** The live exam, `POST /exam/run?questions=5`, read as Server-Sent Events with `fetch` (see
    `api.runExam`). All questions are listed first. Reeta types each answer as it streams in, then each one is
    graded: correct, wrong, or never taught. Under the answer, the exact words of your lecture she relied on are
    highlighted (by word timings for recordings, by text match for typed lessons), with a replay button when
@@ -46,14 +46,19 @@ longer supports, so it has no link on Home.
 
 Run the backend with `LLM_PROVIDER=mock` for a repeatable demo (a real LLM writes different questions). Open
 **http://localhost:5173/#demo**: it resets the session (lectures, notes, attempts) and the local streak. With
-the default notes the 3 questions are self call, base case and smaller problem. Then on stage:
+the default notes the 5 questions are the five recursion concepts (self call, base case, smaller problem,
+independent frames, return propagation). Then on stage:
 
 1. Teach Reeta, **record** so replay works: "A recursive function calls itself. Each call works on a smaller
-   problem. Recursion stops by itself when it is done."
-2. Quiz: 2/3. The base case answer is wrong, and "Because you said" highlights "Recursion stops by itself when
+   problem. Recursion stops by itself when it is done. Each call has its own local variables. The return value
+   passes back up to the caller."
+2. Quiz: 4/5. The base case answer is wrong, and "Because you said" highlights "Recursion stops by itself when
    it is done." in your lecture, with your voice on replay.
 3. Fix it, record: "Recursion needs a base case where it stops, otherwise it recurses forever."
-4. Quiz: 3/3, confetti, streak +1.
+4. Quiz: 5/5, confetti, streak +1.
+
+Other subjects: `demo/notes/` has Biology and Economics notes with lesson scripts. They need a real LLM; the
+mock only turns note sentences into template questions.
 
 Open `#demo` again to reset before the next run.
 

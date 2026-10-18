@@ -7,7 +7,7 @@ import { lines } from '../lib/reetaLines.js'
 import Reeta from './Reeta.jsx'
 import { TopBar } from './ui.jsx'
 
-const QUESTIONS = 3
+const QUESTIONS = 5
 const FACE = `${import.meta.env.BASE_URL}teachback/student-`
 // Minimum gap before each event is shown, so Reeta visibly types even when the stream arrives at once.
 const PACE = { question_start: 450, answer_delta: 28, answer_done: 250, graded: 550 }
