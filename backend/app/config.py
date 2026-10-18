@@ -28,6 +28,13 @@ class Settings:
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_whisper_model: str = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
+    oci_config_file: str = os.getenv("OCI_CONFIG_FILE", "~/.oci/config")
+    oci_profile: str = os.getenv("OCI_PROFILE", "DEFAULT")
+    oci_region: str = os.getenv("OCI_REGION", "us-chicago-1")
+    oci_compartment_id: str = os.getenv("OCI_COMPARTMENT_ID", "")
+    oci_genai_model_id: str = os.getenv("OCI_GENAI_MODEL_ID", "")
+    max_source_chars: int = int(os.getenv("MAX_SOURCE_CHARS", "50000"))  # per uploaded source
+    max_notes_chars: int = int(os.getenv("MAX_NOTES_CHARS", "60000"))    # all sources together, in the prompt
     pass_threshold: float = float(os.getenv("PASS_THRESHOLD", "1.0"))
 
 

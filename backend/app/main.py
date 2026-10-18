@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .config import settings
@@ -13,6 +13,7 @@ from .content import load_answer_key, load_exam
 from .llm.base import get_llm_client
 from .repo.base import get_repository
 from .service import ReetaService
+from .sources import SourceError
 from .speech.base import get_speech_client
 
 
@@ -21,7 +22,8 @@ def build_service() -> ReetaService:
     repo = get_repository(settings.db_provider)
     repo.seed_content(key.concepts, load_exam(settings.content_dir, key), key.edges)
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
-                        key, settings.audio_dir, settings.pass_threshold)
+                        key, settings.audio_dir, settings.pass_threshold,
+                        settings.max_source_chars, settings.max_notes_chars)
 
 
 app = FastAPI(title="Reeta: teach the AI student")

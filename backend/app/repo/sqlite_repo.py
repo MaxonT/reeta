@@ -6,7 +6,7 @@ from pathlib import Path
 from .base import Repository
 
 _SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
-_ENTRY_FIELDS = {"concept_id", "status", "misconception_id", "confirmed", "superseded_by"}
+_LECTURE_FIELDS = {"audio_path", "text", "words"}
 
 
 class SQLiteRepository(Repository):
@@ -41,9 +41,9 @@ class SQLiteRepository(Repository):
                     self.conn.execute("INSERT OR IGNORE INTO concept_edges VALUES (?,?)", (s, t))
             for q in questions:
                 self.conn.execute(
-                    "INSERT OR REPLACE INTO exam_questions VALUES (?,?,?,?,?,?,?)",
-                    (q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"],
-                     json.dumps(q["required_concepts"]), json.dumps(q.get("distractor_map", {}))))
+                    "INSERT OR REPLACE INTO exam_questions (id, type, prompt, options, correct_answer) "
+                    "VALUES (?,?,?,?,?)",
+                    (q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"]))
 
     def list_edges(self):
         return [(r["source_id"], r["target_id"]) for r in self._q("SELECT * FROM concept_edges ORDER BY rowid")]
@@ -53,95 +53,73 @@ class SQLiteRepository(Repository):
         return self._x("INSERT INTO lectures (session_id, kind, text) VALUES (?,?,?)", (session_id, kind, text))
 
     def update_lecture(self, lecture_id, **fields):
-        bad = set(fields) - {"audio_path", "text"}
+        bad = set(fields) - _LECTURE_FIELDS
         if bad:
             raise ValueError(f"cannot update {bad}")
+        if "words" in fields:
+            fields["words"] = json.dumps(fields["words"])
         if fields:
             cols = ", ".join(f"{k}=?" for k in fields)
             self._x(f"UPDATE lectures SET {cols} WHERE id=?", (*fields.values(), lecture_id))
 
+    @staticmethod
+    def _lecture(row: dict) -> dict:
+        return {**row, "words": json.loads(row["words"])}
+
     def get_lecture(self, lecture_id):
         rows = self._q("SELECT * FROM lectures WHERE id=?", (lecture_id,))
-        return rows[0] if rows else None
+        return self._lecture(rows[0]) if rows else None
 
     def list_lectures(self, session_id):
-        lectures = self._q("SELECT * FROM lectures WHERE session_id=? ORDER BY id", (session_id,))
-        for lec in lectures:
-            lec["sentences"] = self._q("SELECT * FROM sentences WHERE lecture_id=? ORDER BY idx", (lec["id"],))
-        return lectures
+        return [self._lecture(r) for r in self._q("SELECT * FROM lectures WHERE session_id=? ORDER BY id", (session_id,))]
 
-    def add_sentences(self, lecture_id, sentences):
-        out = []
-        for s in sentences:
-            sid = self._x("INSERT INTO sentences (lecture_id, idx, text, start_ms, end_ms) VALUES (?,?,?,?,?)",
-                          (lecture_id, s["idx"], s["text"], s["start_ms"], s["end_ms"]))
-            out.append({**s, "id": sid, "lecture_id": lecture_id})
-        return out
+    # Sources
+    def add_source(self, session_id, filename, text):
+        return self._x("INSERT INTO sources (session_id, filename, text) VALUES (?,?,?)", (session_id, filename, text))
 
-    # Notebook
-    def add_entries(self, session_id, entries):
-        out = []
-        for e in entries:
-            eid = self._x(
-                "INSERT INTO notebook_entries (session_id, concept_id, status, misconception_id, sentence_id) "
-                "VALUES (?,?,?,?,?)",
-                (session_id, e["concept_id"], e["status"], e.get("misconception_id"), e["sentence_id"]))
-            out.append({**e, "id": eid, "session_id": session_id, "confirmed": 0, "superseded_by": None})
-        return out
+    def list_sources(self, session_id):
+        return self._q("SELECT * FROM sources WHERE session_id=? ORDER BY id", (session_id,))
 
-    def list_entries(self, session_id, confirmed_only=False):
-        sql = ("SELECT e.*, s.lecture_id, s.idx, s.text, s.start_ms, s.end_ms FROM notebook_entries e "
-               "JOIN sentences s ON s.id = e.sentence_id WHERE e.session_id=?")
-        if confirmed_only:
-            sql += " AND e.confirmed=1"
-        rows = self._q(sql + " ORDER BY e.id", (session_id,))
-        out = []
-        for r in rows:
-            sentence = {"id": r["sentence_id"], "lecture_id": r.pop("lecture_id"), "idx": r.pop("idx"),
-                        "text": r.pop("text"), "start_ms": r.pop("start_ms"), "end_ms": r.pop("end_ms")}
-            out.append({**r, "confirmed": bool(r["confirmed"]), "sentence": sentence})
-        return out
-
-    def update_entry(self, entry_id, **fields):
-        bad = set(fields) - _ENTRY_FIELDS
-        if bad:
-            raise ValueError(f"cannot update {bad}")
-        if not fields:
-            return
-        cols = ", ".join(f"{k}=?" for k in fields)
-        self._x(f"UPDATE notebook_entries SET {cols} WHERE id=?", (*fields.values(), entry_id))
+    def delete_source(self, session_id, source_id):
+        with self.lock, self.conn:
+            cur = self.conn.execute("DELETE FROM sources WHERE id=? AND session_id=?", (source_id, session_id))
+            return cur.rowcount > 0
 
     # Exam
     def list_questions(self):
         rows = self._q("SELECT * FROM exam_questions ORDER BY CAST(SUBSTR(id, 2) AS INTEGER), id")
         for r in rows:
-            for k in ("options", "required_concepts", "distractor_map"):
-                r[k] = json.loads(r[k])
+            r["options"] = json.loads(r["options"])
         return rows
 
-    def create_attempt(self, session_id, score):
+    def create_attempt(self, session_id):
         with self.lock, self.conn:
             n = self.conn.execute("SELECT COUNT(*) FROM exam_attempts WHERE session_id=?", (session_id,)).fetchone()[0]
-            aid = self.conn.execute("INSERT INTO exam_attempts (session_id, attempt_no, score) VALUES (?,?,?)",
-                                    (session_id, n + 1, score)).lastrowid
+            aid = self.conn.execute("INSERT INTO exam_attempts (session_id, attempt_no) VALUES (?,?)",
+                                    (session_id, n + 1)).lastrowid
         return aid, n + 1
+
+    def set_attempt_score(self, attempt_id, score):
+        self._x("UPDATE exam_attempts SET score=? WHERE id=?", (score, attempt_id))
 
     def add_answers(self, attempt_id, answers):
         with self.lock, self.conn:
             for a in answers:
                 self.conn.execute(
-                    "INSERT INTO exam_answers VALUES (?,?,?,?,?,?,?,?)",
-                    (attempt_id, a["question_id"], a["answer"], int(a["is_correct"]), a["reason"],
-                     json.dumps(a["concept_ids"]), json.dumps(a["sentence_ids"]), a.get("line")))
+                    "INSERT INTO exam_answers (attempt_id, question_id, prompt, reference_answer, answer, "
+                    "is_correct, reason, feedback, lecture_id, quote, quote_start_ms, quote_end_ms, line) "
+                    "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (attempt_id, a["question_id"], a.get("prompt", ""), a.get("reference_answer", ""),
+                     a["answer"], int(a["is_correct"]), a["reason"], a.get("feedback"),
+                     a.get("lecture_id"), a.get("quote"), a.get("quote_start_ms"), a.get("quote_end_ms"),
+                     a.get("line")))
 
     def list_attempts(self, session_id):
         attempts = self._q("SELECT * FROM exam_attempts WHERE session_id=? ORDER BY attempt_no", (session_id,))
         for at in attempts:
-            answers = self._q("SELECT * FROM exam_answers WHERE attempt_id=?", (at["id"],))
+            answers = self._q("SELECT * FROM exam_answers WHERE attempt_id=? ORDER BY question_id", (at["id"],))
             for a in answers:
                 a["is_correct"] = bool(a["is_correct"])
-                a["concept_ids"] = json.loads(a["concept_ids"])
-                a["sentence_ids"] = json.loads(a["sentence_ids"])
             at["answers"] = answers
         return attempts
 
@@ -166,7 +144,5 @@ class SQLiteRepository(Repository):
             c.execute("DELETE FROM exam_answers WHERE attempt_id IN (SELECT id FROM exam_attempts WHERE session_id=?)",
                       (session_id,))
             c.execute("DELETE FROM exam_attempts WHERE session_id=?", (session_id,))
-            c.execute("DELETE FROM notebook_entries WHERE session_id=?", (session_id,))
-            c.execute("DELETE FROM sentences WHERE lecture_id IN (SELECT id FROM lectures WHERE session_id=?)",
-                      (session_id,))
             c.execute("DELETE FROM lectures WHERE session_id=?", (session_id,))
+            c.execute("DELETE FROM sources WHERE session_id=?", (session_id,))
