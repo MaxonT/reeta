@@ -185,7 +185,7 @@
 .lp-type textarea {
   width: 100%; resize: vertical; min-height: 110px; padding: 14px 16px; border-radius: 16px;
   border: 1.5px solid var(--lp-line); background: var(--lp-surface); color: var(--lp-ink);
-  font: 16px/1.5 inherit; font-family: inherit;
+  font: inherit; font-size: 16px; line-height: 1.5;
 }
 .lp-type textarea:focus { outline: none; border-color: var(--lp-accent); box-shadow: 0 0 0 4px var(--lp-accent-soft); }
 
@@ -268,3 +268,60 @@
 
 /* Auto scroll target under the quiz cards: stop above the sticky action bar. */
 .lp-end { scroll-margin-bottom: 120px; }
+
+/* ---- Course notes (Home chip and Notes screen) ---- */
+.lp-last { margin: 0; font-size: 14px; color: var(--lp-muted); }
+.lp-last b { color: var(--lp-ink-2); }
+.lp-notes-chip {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 10px 14px;
+  border: 0; border-radius: 14px; background: var(--lp-surface); box-shadow: 0 0 0 1px var(--lp-line);
+  color: var(--lp-ink-2); text-align: left; cursor: pointer; font-size: 14px;
+}
+.lp-notes-chip:hover { box-shadow: 0 0 0 1.5px var(--lp-accent); }
+.lp-notes-chip svg { flex: none; color: var(--lp-accent); }
+.lp-notes-chip-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lp-notes-chip-go { flex: none; font-weight: 600; color: var(--lp-accent); }
+.lp-notes-screen { align-items: stretch; }
+.lp-lead { margin: 0; font-size: 15px; color: var(--lp-ink-2); }
+.lp-muted { margin: 0; font-size: 13px; color: var(--lp-muted); }
+.lp-sources, .lp-add { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+.lp-source { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-top: 1px solid var(--lp-line); }
+.lp-source-name { font-weight: 600; overflow-wrap: anywhere; }
+.lp-file { position: relative; display: flex; align-items: center; justify-content: center; min-height: 48px; cursor: pointer; }
+.lp-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.lp-file:focus-within { outline: 3px solid var(--lp-focus); outline-offset: 3px; }
+.lp-file.is-busy { opacity: 0.6; }
+.lp-add textarea {
+  width: 100%; resize: vertical; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--lp-line);
+  background: #fbfaf7; font: inherit; font-size: 15px; color: var(--lp-ink);
+}
+.lp-add textarea:focus { outline: none; border-color: var(--lp-accent); box-shadow: 0 0 0 4px var(--lp-accent-soft); }
+.lp-add-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.lp-add-row .lp-btn { min-height: 44px; padding: 0 18px; }
+
+/* ---- Teach: fix context and transcript ---- */
+.lp-context-label { display: block; font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #8a6a1f; margin-bottom: 2px; }
+.lp-transcript { padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.lp-transcript p { margin: 0; font-size: 16px; color: var(--lp-ink); }
+
+/* ---- Live exam ---- */
+.lp-q.is-waiting { opacity: 0.55; box-shadow: 0 0 0 1px var(--lp-line); }
+.lp-q.is-current { box-shadow: var(--lp-shadow), 0 0 0 2px var(--lp-accent); }
+.lp-typing { display: inline-flex; gap: 4px; }
+.lp-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--lp-accent); animation: lp-blink 1s infinite ease-in-out; }
+.lp-typing i:nth-child(2) { animation-delay: 0.15s; }
+.lp-typing i:nth-child(3) { animation-delay: 0.3s; }
+.lp-caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--lp-ink-2); animation: lp-blink 0.9s steps(2) infinite; }
+@keyframes lp-blink { 50% { opacity: 0.25; } }
+.lp-pen.is-good { background: var(--lp-accent-soft); border-left-color: var(--lp-accent); }
+.lp-pen.is-good .lp-pen-label { color: var(--lp-accent); }
+.lp-excerpt { margin: 2px 0 0; font-size: 15px; line-height: 1.55; color: var(--lp-ink-2); }
+.lp-hl { background: rgba(210, 63, 55, 0.16); color: #6e1d18; font-weight: 600; border-radius: 4px; padding: 0 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.lp-pen.is-good .lp-hl { background: rgba(18, 128, 92, 0.16); color: #0c4a35; }
+.lp-feedback { margin: 0; font-size: 14px; color: var(--lp-muted); }
+.lp-missed li { flex-direction: column; gap: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .lp-typing i, .lp-caret { animation: none; }
+}
+.lp-mark.is-missing { background: #b9b4a8; }
+.lp-pen.is-good .lp-play { background: var(--lp-accent); box-shadow: 0 3px 0 var(--lp-accent-press); }
