@@ -29,6 +29,7 @@ def _clean(row: dict) -> dict:
     return row
 
 
+
 class OracleRepository(Repository):
     def __init__(self):
         wallet = str(_path(settings.oracle_wallet_dir))
@@ -70,24 +71,8 @@ class OracleRepository(Repository):
         cur.execute(f"{sql} RETURNING id INTO :{marks}", [*args, out])
         return int(out.getvalue()[0])
 
-    def seed_content(self, concepts, questions, edges=None):
+    def seed_content(self, questions):
         with self.pool.acquire() as conn, conn.cursor() as cur:
-            for c in concepts:
-                cur.execute(
-                    "MERGE INTO concepts t USING (SELECT :1 i, :2 l, :3 d FROM dual) s ON (t.id = s.i) "
-                    "WHEN MATCHED THEN UPDATE SET t.label=s.l, t.description=s.d "
-                    "WHEN NOT MATCHED THEN INSERT (id, label, description) VALUES (s.i, s.l, s.d)",
-                    [c["id"], c["label"], c["description"]])
-                for m in c.get("misconceptions", []):
-                    cur.execute(
-                        "MERGE INTO misconceptions t USING (SELECT :1 i, :2 c, :3 d FROM dual) s ON (t.id = s.i) "
-                        "WHEN MATCHED THEN UPDATE SET t.concept_id=s.c, t.description=s.d "
-                        "WHEN NOT MATCHED THEN INSERT (id, concept_id, description) VALUES (s.i, s.c, s.d)",
-                        [m["id"], c["id"], m["description"]])
-            if edges is not None:
-                cur.execute("DELETE FROM concept_edges")
-                for s, t in edges:
-                    cur.execute("INSERT INTO concept_edges (source_id, target_id) VALUES (:1,:2)", [s, t])
             for q in questions:
                 cur.execute(
                     "MERGE INTO exam_questions t "
@@ -97,10 +82,6 @@ class OracleRepository(Repository):
                     "VALUES (s.i, s.ty, s.p, s.o, s.c)",
                     [q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"]])
             conn.commit()
-
-    def list_edges(self):
-        return [(r["source_id"], r["target_id"])
-                for r in self._q("SELECT source_id, target_id FROM concept_edges ORDER BY ROWID")]
 
     # Lectures
     def create_lecture(self, session_id, kind, text):
@@ -187,24 +168,6 @@ class OracleRepository(Repository):
                 a["is_correct"] = bool(a["is_correct"])
             at["answers"] = answers
         return attempts
-
-    # Daily loop
-    def add_round(self, session_id, created_at, lecture_id, score, total, passed, concept_ids):
-        with self.pool.acquire() as conn, conn.cursor() as cur:
-            rid = self._insert(
-                cur,
-                "INSERT INTO loop_rounds (session_id, created_at, lecture_id, score, total, passed, concept_ids) "
-                "VALUES (:1,:2,:3,:4,:5,:6,:7)",
-                [session_id, created_at, lecture_id, score, total, int(bool(passed)), json.dumps(list(concept_ids))])
-            conn.commit()
-            return rid
-
-    def list_rounds(self, session_id):
-        rows = self._q("SELECT * FROM loop_rounds WHERE session_id=:1 ORDER BY id", (session_id,))
-        for r in rows:
-            r["passed"] = bool(r["passed"])
-            r["concept_ids"] = json.loads(r["concept_ids"])
-        return rows
 
     def reset_session(self, session_id):
         with self.pool.acquire() as conn, conn.cursor() as cur:
