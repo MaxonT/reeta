@@ -56,7 +56,7 @@ export const lines = {
     if (mood === 'sad') return 'Hey, I missed you! Ready to teach me something? 🥲'
     if (mood === 'confused') return 'Last time was tricky, but we can get it. Teach me again?'
     if (streak > 0) return `${streak} day streak! 🔥 I have a quiz today and I only know what you teach me.`
-    return 'Hi! I have a quiz today and I know nothing 😭 Can you teach me?'
+    return 'What are we trying to learn today?'
   },
   teachIdle: 'Okay, I’m ready! Explain it like I know nothing. Because I know nothing 😄',
   teachFix: 'I want to get this one right. Can you explain it again, nice and slow?',
