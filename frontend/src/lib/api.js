@@ -1,6 +1,10 @@
 // All calls go through the Vite proxy (/api -> backend). Keys never reach the browser.
 import { activeTopic, clearAuth, token } from './auth.js'
 
+// Where the backend lives. Set VITE_API_BASE_URL at build time (e.g. https://my-backend.up.railway.app/api)
+// to host the frontend separately. Unset, it is the same-origin /api (Vite dev proxy or the Docker image).
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
+
 export const SESSION = (() => { try { return localStorage.getItem('reeta_session') || 'demo' } catch { return 'demo' } })()
 
 // Logged in: the account's token, and the backend uses the account's data (the active topic's, if one is
@@ -78,7 +82,7 @@ export const api = {
   officeHours: () => req('GET', '/office-hours'),
   report: () => req('GET', '/report'),
   reset: () => req('POST', '/session/reset'),
-  audioUrl: (lectureId) => `/api/lectures/${lectureId}/audio`,
+  audioUrl: (lectureId) => `${API_BASE}/lectures/${lectureId}/audio`,
 
   // Source material the exam questions are written from (.txt, .md or pasted text). Per session.
   sources: () => req('GET', '/sources'),
