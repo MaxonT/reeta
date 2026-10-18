@@ -1,4 +1,4 @@
-// All calls go through the Vite proxy (/api -> backend). Keys never reach the browser.
+// All calls go to API_BASE (by default /api, the Vite proxy or the Docker image). Keys never reach the browser.
 import { activeTopic, clearAuth, token } from './auth.js'
 
 // Where the backend lives. Set VITE_API_BASE_URL at build time (e.g. https://my-backend.up.railway.app/api)
@@ -27,7 +27,7 @@ async function req(method, path, body) {
     opts.headers['Content-Type'] = 'application/json'
     opts.body = JSON.stringify(body)
   }
-  const res = await fetch(`/api${path}`, opts)
+  const res = await fetch(`${API_BASE}${path}`, opts)
   checkAuth(res)
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`)
   return res.json()
@@ -98,7 +98,7 @@ export const api = {
   // onEvent(name, data) is called for each event in order. Resolves when the stream ends.
   // EventSource cannot POST, so this reads the body stream by hand. Abort with signal.
   runExam: async (onEvent, { questions = 3, signal } = {}) => {
-    const res = await fetch(`/api/exam/run?questions=${questions}`, { method: 'POST', headers: authHeaders(), signal })
+    const res = await fetch(`${API_BASE}/exam/run?questions=${questions}`, { method: 'POST', headers: authHeaders(), signal })
     checkAuth(res)
     if (!res.ok || !res.body) throw new Error(`POST /exam/run: ${res.status} ${await res.text()}`)
     const reader = res.body.getReader()
