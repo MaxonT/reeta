@@ -179,5 +179,12 @@
         }
       ]
     }
+  ],
+  "edges": [
+    ["self_call", "base_case"],
+    ["base_case", "smaller_problem"],
+    ["self_call", "independent_frames"],
+    ["independent_frames", "return_propagation"],
+    ["smaller_problem", "return_propagation"]
   ]
 }

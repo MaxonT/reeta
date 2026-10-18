@@ -3,7 +3,8 @@ import re
 from collections.abc import Iterator
 
 from ..content import AnswerKey
-from .base import LLMClient, template_phrase, validate_entries
+from ..persona import quiz_line
+from .base import LLMClient, validate_entries
 
 _NEGATION = re.compile(r"\b(not|never|no|don't|dont|doesn't|doesnt|isn't|isnt|aren't|won't|can't|cannot)\b")
 
@@ -66,59 +67,4 @@ class MockLLMClient(LLMClient):
         return None
 
     def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
-        return template_phrase(result, question, key)
-
-    # Live exam, offline. Default notes: one question per concept, answered by quoting the matching sentence.
-    # Uploaded notes: one question per sentence, answered by the transcript sentence sharing the most words.
-    def __init__(self):
-        self._concepts: dict[str, dict] = {}  # question prompt -> concept it was written from
-        self._refs: dict[str, str] = {}       # question prompt -> notes sentence it was written from
-
-    def generate_questions(self, key: AnswerKey, n: int, notes: str | None = None) -> list[dict]:
-        out = []
-        if notes is None:
-            for c in key.concepts[:n]:
-                prompt = f"In your own words, explain: {c['label'].lower()}."
-                self._concepts[prompt] = c
-                out.append({"prompt": prompt, "reference_answer": c["description"]})
-            return out
-        for s in _sentences(notes):
-            if len(s.split()) < 6:
-                continue
-            prompt = f"Explain what the notes say about: {' '.join(s.split()[:4])}..."
-            self._refs[prompt] = s
-            out.append({"prompt": prompt, "reference_answer": s})
-            if len(out) == n:
-                break
-        if not out:
-            raise ValueError("no usable sentences in the notes")
-        return out
-
-    def answer_stream(self, question: str, transcripts: str) -> Iterator[str]:
-        concept, ref = self._concepts.get(question), self._refs.get(question)
-        sentences = _sentences(transcripts)
-        if concept:
-            hits = [s for s in sentences if self._match_concept(_norm(s), concept)]
-        elif ref:
-            best = max(sentences, key=lambda s: _overlap(s, ref), default=None)
-            hits = [best] if best and _overlap(best, ref) >= _MIN_OVERLAP else []
-        else:
-            hits = []
-        reply = (f"You told me: {hits[-1]}\nQUOTE: {hits[-1]}" if hits  # latest teaching wins
-                 else "I don't know. You never taught me that.\nQUOTE: NONE")
-        for i in range(0, len(reply), 12):
-            yield reply[i:i + 12]
-
-    def judge(self, question: str, reference: str, answer: str, quote: str) -> dict:
-        # the mock only ever answers by quoting a sentence, so its answers are always supported by the quote
-        if question in self._refs:
-            if _overlap(answer, self._refs[question]) >= _MIN_OVERLAP:
-                return {"is_correct": True, "supported": True, "feedback": "That matches the notes."}
-            return {"is_correct": False, "supported": True, "feedback": "That does not cover the key idea."}
-        concept = self._concepts.get(question)
-        match = self._match_concept(_norm(answer), concept) if concept else None
-        if match and match["status"] == "correct":
-            return {"is_correct": True, "supported": True, "feedback": "That matches the course notes."}
-        if match:
-            return {"is_correct": False, "supported": True, "feedback": "That is a common misconception."}
-        return {"is_correct": False, "supported": True, "feedback": "That does not cover the key idea."}
+        return quiz_line(result, question, key)

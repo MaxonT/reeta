@@ -6,6 +6,8 @@ export default function LectureHall({ answerKey, notebook, onConfirmed, go }) {
   const [recording, setRecording] = useState(false)
   const [said, setSaid] = useState(null)
   const mood = recording ? 'listening' : said ? moodFromNotebook(notebook?.concepts) : 'listening'
+  const entries = notebook?.entries || []
+  const label = (id) => answerKey?.concepts.find((c) => c.id === id)?.label || id
 
   function confirmed(nb) {
     const counts = countStatus(nb.concepts)
@@ -17,12 +19,34 @@ export default function LectureHall({ answerKey, notebook, onConfirmed, go }) {
 
   return (
     <div className="scene lecture-hall">
-      <TeachPanel kind="lecture" answerKey={answerKey} onConfirmed={confirmed} onRecordingChange={setRecording} />
-      <div className="seat">
-        <AIStudent expression={mood} say={recording ? null : said || 'I know nothing yet. Teach me recursion!'} />
-        <div className="desk" />
-        <button className="btn" onClick={() => go('notebook')}>Peek at my Notebook →</button>
+      <div className="scene-head">
+        <div className="tiny">01 / Lecture hall</div>
+        <h1>The floor is yours, Professor.</h1>
+        <p>Teach out loud. Your student starts with a blank page.</p>
       </div>
+      <div className="lecture-main">
+        <TeachPanel kind="lecture" answerKey={answerKey} onConfirmed={confirmed} onRecordingChange={setRecording} />
+        <div className="student-row">
+          <AIStudent expression={mood} size={126} say={recording ? null : said || 'I know nothing yet. Teach me recursion!'} />
+        </div>
+      </div>
+      <aside className="paper ruled lecture-notes">
+        <div className="tiny">My Notebook</div>
+        <div className="paper-title">What I wrote down</div>
+        <div className="notes-list">
+          {!entries.length && <div className="hand dim">Empty. Teach me something, then check my notes on the board.</div>}
+          {entries.map((e) => (
+            <div key={e.id} className={`note ${e.status} ${e.superseded_by ? 'superseded' : ''}`}>
+              <span className="note-tag">{label(e.concept_id)}</span>
+              <span className="hand">“{e.sentence.text}”</span>
+            </div>
+          ))}
+        </div>
+        <div className="scribble" aria-hidden="true" />
+        <div className="row">
+          <button className="btn" onClick={() => go('notebook')}>Peek at my Notebook →</button>
+        </div>
+      </aside>
     </div>
   )
 }

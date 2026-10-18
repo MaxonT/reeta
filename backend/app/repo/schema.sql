@@ -1,6 +1,18 @@
--- Simplified schema: Reeta's memory is the student's transcripts.
--- Dropped: concepts, misconceptions, sentences, notebook_entries.
-
+CREATE TABLE IF NOT EXISTS concepts (
+    id TEXT PRIMARY KEY,
+    label TEXT NOT NULL,
+    description TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS misconceptions (
+    id TEXT PRIMARY KEY,
+    concept_id TEXT NOT NULL REFERENCES concepts(id),
+    description TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS concept_edges (
+    source_id TEXT NOT NULL REFERENCES concepts(id),
+    target_id TEXT NOT NULL REFERENCES concepts(id),
+    PRIMARY KEY (source_id, target_id)
+);
 CREATE TABLE IF NOT EXISTS lectures (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
@@ -55,4 +67,13 @@ CREATE TABLE IF NOT EXISTS sources (
     text TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX IF NOT EXISTS sources_session ON sources(session_id, id);
+CREATE TABLE IF NOT EXISTS loop_rounds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,                      -- ISO 8601, server local time
+    lecture_id INTEGER REFERENCES lectures(id),    -- latest lecture when the round was played, nullable
+    score INTEGER NOT NULL,
+    total INTEGER NOT NULL,
+    passed INTEGER NOT NULL,                       -- 1 when every question was correct
+    concept_ids TEXT NOT NULL                      -- JSON list of concepts the round covered
+);
