@@ -1,43 +1,47 @@
-"""Storage interface. Business logic (supersede, grading) never touches SQL."""
+"""Storage interface. Business logic (grading, Reeta's answers) never touches SQL."""
 from abc import ABC, abstractmethod
 
 
 class Repository(ABC):
     @abstractmethod
-    def seed_content(self, concepts: list[dict], questions: list[dict]) -> None: ...
+    def seed_content(self, questions: list[dict]) -> None:
+        """Upsert Exam questions: id, type, prompt, options, correct_answer."""
 
-    # Lectures and sentences
+    # Lectures: Reeta's memory is their transcripts
     @abstractmethod
     def create_lecture(self, session_id: str, kind: str, text: str) -> int: ...
     @abstractmethod
     def update_lecture(self, lecture_id: int, **fields) -> None:
-        """fields among audio_path, text"""
+        """fields among audio_path, text, words (list of {w, start_ms, end_ms})"""
     @abstractmethod
-    def get_lecture(self, lecture_id: int) -> dict | None: ...
+    def get_lecture(self, lecture_id: int) -> dict | None:
+        """`words` comes back as a parsed list."""
     @abstractmethod
     def list_lectures(self, session_id: str) -> list[dict]:
-        """Lectures with their sentences, oldest first."""
-    @abstractmethod
-    def add_sentences(self, lecture_id: int, sentences: list[dict]) -> list[dict]: ...
+        """Oldest first."""
 
-    # Notebook entries (never deleted; replaced via superseded_by)
+    # Source material the exam questions are written from
     @abstractmethod
-    def add_entries(self, session_id: str, entries: list[dict]) -> list[dict]: ...
+    def add_source(self, session_id: str, filename: str, text: str) -> int: ...
     @abstractmethod
-    def list_entries(self, session_id: str, confirmed_only: bool = False) -> list[dict]:
-        """Entries with joined `sentence`, ordered by id."""
+    def list_sources(self, session_id: str) -> list[dict]:
+        """Oldest first, with full `text`."""
     @abstractmethod
-    def update_entry(self, entry_id: int, **fields) -> None:
-        """fields among concept_id, status, misconception_id, confirmed, superseded_by"""
+    def delete_source(self, session_id: str, source_id: int) -> bool:
+        """False if that source does not exist in this session."""
 
     # Exam
     @abstractmethod
     def list_questions(self) -> list[dict]: ...
     @abstractmethod
-    def create_attempt(self, session_id: str, score: int) -> tuple[int, int]:
+    def create_attempt(self, session_id: str) -> tuple[int, int]:
         """-> (attempt_id, attempt_no)"""
     @abstractmethod
-    def add_answers(self, attempt_id: int, answers: list[dict]) -> None: ...
+    def set_attempt_score(self, attempt_id: int, score: int) -> None: ...
+    @abstractmethod
+    def add_answers(self, attempt_id: int, answers: list[dict]) -> None:
+        """answer keys: question_id, answer, is_correct, reason; optional: prompt, reference_answer,
+        feedback, lecture_id, quote, quote_start_ms, quote_end_ms, line"""
     @abstractmethod
     def list_attempts(self, session_id: str) -> list[dict]:
         """Attempts with their `answers`, oldest first."""

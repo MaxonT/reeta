@@ -4,10 +4,12 @@
 They never decide an answer. Grading lives in grading.py.
 """
 from abc import ABC, abstractmethod
+from collections.abc import Iterator
 
 from ..content import AnswerKey
 
 VALID_STATUS = {"correct", "misconception"}
+RESET = "\x00reset"  # yielded by FallbackLLMClient.answer_stream when it restarts the answer on the fallback
 
 
 class LLMClient(ABC):
@@ -18,6 +20,21 @@ class LLMClient(ABC):
     @abstractmethod
     def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
         """-> one or two sentences the AI student says about this graded result"""
+
+    # Live exam. Not abstract: a client without them falls through to the Mock in FallbackLLMClient.
+    def generate_questions(self, key: AnswerKey, n: int, notes: str | None = None) -> list[dict]:
+        """-> [{prompt, reference_answer}] open-ended. Written from `notes` (the session's uploaded
+        source material), or from the built-in course notes in `key` when notes is None."""
+        raise NotImplementedError
+
+    def answer_stream(self, question: str, transcripts: str) -> Iterator[str]:
+        """Yield raw text chunks of Reeta's reply: `<answer>\\nQUOTE: <verbatim words | NONE>`"""
+        raise NotImplementedError
+
+    def judge(self, question: str, reference: str, answer: str, quote: str) -> dict:
+        """-> {is_correct: bool, supported: bool, feedback: str}. supported=False means the answer
+        goes beyond what the quote says (outside knowledge), which counts as not taught."""
+        raise NotImplementedError
 
 
 def validate_entries(raw: list, sentences: list[dict], key: AnswerKey) -> list[dict]:
@@ -73,6 +90,33 @@ class FallbackLLMClient(LLMClient):
         except Exception as exc:  # noqa: BLE001
             print(f"[llm] primary phrase failed, using fallback: {exc}")
             return self.fallback.phrase(result, question, key)
+
+    def generate_questions(self, key, n, notes=None):
+        try:
+            return self.primary.generate_questions(key, n, notes)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[llm] primary generate_questions failed, using fallback: {exc}")
+            return self.fallback.generate_questions(key, n, notes)
+
+    def answer_stream(self, question, transcripts):
+        started = False
+        try:
+            for chunk in self.primary.answer_stream(question, transcripts):
+                started = True
+                yield chunk
+            return
+        except Exception as exc:  # noqa: BLE001
+            print(f"[llm] primary answer_stream failed, using fallback: {exc}")
+        if started:
+            yield RESET  # the partial answer on screen is discarded
+        yield from self.fallback.answer_stream(question, transcripts)
+
+    def judge(self, question, reference, answer, quote):
+        try:
+            return self.primary.judge(question, reference, answer, quote)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[llm] primary judge failed, using fallback: {exc}")
+            return self.fallback.judge(question, reference, answer, quote)
 
 
 def get_llm_client(provider: str) -> LLMClient:
