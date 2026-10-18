@@ -26,6 +26,7 @@ class Settings:
     question_file: str = os.getenv("QUESTION_FILE", "photosynthesis_questions.json")  # in CONTENT_DIR, for fixed
     question_shuffle: bool = os.getenv("QUESTION_SHUFFLE", "false").lower() in ("1", "true", "yes")  # fixed: random pick
     sqlite_path: Path = _path(os.getenv("SQLITE_PATH", "backend/data/reeta.db"))
+    postgres_url: str = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL", "")
     audio_dir: Path = _path(os.getenv("AUDIO_DIR", "backend/data/audio"))
     content_dir: Path = _path(os.getenv("CONTENT_DIR", "content"))
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")

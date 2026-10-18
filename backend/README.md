@@ -45,6 +45,7 @@ service.py     ReetaService: the game rules (ingest, confirm, exam, office hours
    └── repo/    Repository: lectures, sentences, notebook entries, exam attempts
           sqlite_repo.py      SQLiteRepository       DB_PROVIDER=sqlite (default, backend/data/reeta.db)
           oracle_repo.py      OracleRepository       DB_PROVIDER=oracle (stub, TODO)
+          postgres_repo.py    PostgresRepository     DB_PROVIDER=postgres (asyncpg, POSTGRES_URL; schema via Alembic in backend/migrations)
           schema.sql          table definitions
 ```
 

@@ -100,7 +100,7 @@ Providers are chosen with env vars, so OCI plugs in without touching business lo
 |-------------------|--------------------------------|----------|
 | `SPEECH_PROVIDER` | `openai`, `browser`, `oci`     | `openai` |
 | `LLM_PROVIDER`    | `mock`, `openai`, `oci`        | `mock`   |
-| `DB_PROVIDER`     | `sqlite`, `oracle`             | `sqlite` |
+| `DB_PROVIDER`     | `sqlite`, `oracle`, `postgres` | `sqlite` |
 
 If server transcription fails (no key, network), the backend uses the transcript the browser sent from the Web
 Speech API. If that is missing too, the Lecture can be typed. `openai` and `oci` LLM clients fall back to the Mock.
