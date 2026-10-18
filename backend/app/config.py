@@ -33,6 +33,11 @@ class Settings:
     oci_region: str = os.getenv("OCI_REGION", "us-chicago-1")
     oci_compartment_id: str = os.getenv("OCI_COMPARTMENT_ID", "")
     oci_genai_model_id: str = os.getenv("OCI_GENAI_MODEL_ID", "")
+    oracle_user: str = os.getenv("ORACLE_USER", "ADMIN")
+    oracle_password: str = os.getenv("ORACLE_PASSWORD", "")
+    oracle_dsn: str = os.getenv("ORACLE_DSN", "")
+    oracle_wallet_dir: str = os.getenv("ORACLE_WALLET_DIR", "backend/wallet")
+    oracle_wallet_password: str = os.getenv("ORACLE_WALLET_PASSWORD", "")
     max_source_chars: int = int(os.getenv("MAX_SOURCE_CHARS", "50000"))  # per uploaded source
     max_notes_chars: int = int(os.getenv("MAX_NOTES_CHARS", "60000"))    # all sources together, in the prompt
     pass_threshold: float = float(os.getenv("PASS_THRESHOLD", "1.0"))

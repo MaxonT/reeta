@@ -1,20 +1,32 @@
-"""Oracle Autonomous Database repository via python-oracledb. STUB, not wired yet.
+"""Oracle Autonomous Database repository via python-oracledb (thin mode, wallet / mTLS)."""
+import json
+from datetime import datetime
+from pathlib import Path
 
-TODO(oracle):
-  1. pip install oracledb
-  2. pool = oracledb.create_pool(user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=ORACLE_DSN,
-         config_dir=ORACLE_WALLET_DIR, wallet_location=ORACLE_WALLET_DIR, wallet_password=...)
-  3. Port repo/schema.sql: INTEGER PRIMARY KEY AUTOINCREMENT -> NUMBER GENERATED ALWAYS AS IDENTITY,
-     TEXT -> VARCHAR2 / CLOB, JSON columns -> JSON type (23ai) or CLOB with IS JSON check,
-     INSERT OR REPLACE -> MERGE, lastrowid -> RETURNING id INTO :out.
-  4. Implement every Repository method with the same return shapes as SQLiteRepository
-     (tests in backend/tests can be pointed at it to check parity).
-"""
+import oracledb
+
+from ..config import _path, settings
 from .base import Repository
 
+oracledb.defaults.fetch_lobs = False  # CLOBs come back as plain str
 
-def _todo(*_a, **_k):
-    raise NotImplementedError("OracleRepository is a stub. See TODO in repo/oracle_repo.py")
+_SCHEMA = (Path(__file__).parent / "oracle_schema.sql").read_text()
+_LECTURE_FIELDS = {"audio_path", "text", "words"}
+# Oracle stores '' as NULL, so empty text is written as a single space and mapped back on read.
+_EMPTY = " "
+_TEXT_COLS = ("text", "prompt", "reference_answer")
+
+
+def _clean(row: dict) -> dict:
+    for k, v in row.items():
+        if isinstance(v, datetime):
+            row[k] = v.strftime("%Y-%m-%d %H:%M:%S")
+        elif isinstance(v, float) and v.is_integer():
+            row[k] = int(v)
+    for k in _TEXT_COLS:
+        if k in row and (row[k] is None or row[k] == _EMPTY):
+            row[k] = ""
+    return row
 
 
 class OracleRepository(Repository):

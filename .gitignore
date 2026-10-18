@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+backend/wallet/
 
 # python
 __pycache__/
