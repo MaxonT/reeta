@@ -1,6 +1,5 @@
 """Offline extractor: synonym and misconception phrase matching. The demo safety net."""
 import re
-from collections.abc import Iterator
 
 from ..content import AnswerKey
 from ..persona import quiz_line
@@ -23,22 +22,6 @@ def _negated(text: str, pos: int) -> bool:
     """A negation within the 4 words before the match flips its meaning."""
     window = " ".join(text[:pos].split()[-4:])
     return bool(_NEGATION.search(window))
-
-
-_MIN_OVERLAP = 0.5  # share of the reference's words that must appear in the answer / transcript sentence
-
-
-def _sentences(text: str) -> list[str]:
-    """Sentences of a transcript or notes block, skipping the '[Lecture 1]' and '## file' labels."""
-    lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith(("[Lecture", "## "))]
-    return [s.strip() for ln in lines for s in re.split(r"(?<=[.!?])\s+", ln) if s.strip()]
-
-
-def _overlap(text: str, ref: str) -> float:
-    """Share of the reference's longer words (4+ letters) that also appear in text."""
-    words = {w for w in _norm(ref).split() if len(w) >= 4}
-    have = set(_norm(text).split())
-    return len(words & have) / len(words) if words else 0.0
 
 
 class MockLLMClient(LLMClient):

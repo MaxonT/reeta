@@ -5,6 +5,5 @@ python-dotenv>=1.0
 openai>=1.30
 pytest>=8.0
 httpx>=0.27
-oracledb
 oci>=2.130
-
+# later: oracledb
