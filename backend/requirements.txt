@@ -9,3 +9,6 @@ pypdf>=5.0           # PDF notes
 python-docx>=1.1     # Word .docx notes
 oci
 oracledb
+asyncpg>=0.29        # DB_PROVIDER=postgres
+sqlalchemy[asyncio]>=2.0     # Alembic only, the repository is plain asyncpg
+alembic>=1.13

@@ -14,5 +14,5 @@ COPY backend/ backend/
 COPY content/ content/
 COPY --from=frontend /build/dist frontend/dist
 WORKDIR /app/backend
-# unpack the Oracle wallet from env vars, then start the server on Railway's $PORT
-CMD ["sh", "-c", "python unpack_secrets.py && uvicorn app.prod:root --host 0.0.0.0 --port ${PORT:-8000}"]
+# unpack the Oracle wallet from env vars, apply Postgres migrations if that is the DB, then start the server on Railway's $PORT
+CMD ["sh", "-c", "python unpack_secrets.py && if [ \"$DB_PROVIDER\" = postgres ]; then alembic upgrade head; fi && uvicorn app.prod:root --host 0.0.0.0 --port ${PORT:-8000}"]
