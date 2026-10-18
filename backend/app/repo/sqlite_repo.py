@@ -17,7 +17,14 @@ class SQLiteRepository(Repository):
         self.conn.row_factory = sqlite3.Row
         self.lock = threading.RLock()
         with self.lock:
+            self._check_schema(path)
             self.conn.executescript(_SCHEMA)
+
+    def _check_schema(self, path):
+        # A database created by the reverted open-ended exam (PR #8) has different tables.
+        cols = [r[1] for r in self.conn.execute("PRAGMA table_info(exam_questions)")]
+        if cols and "distractor_map" not in cols:
+            raise RuntimeError(f"{path} was created by an older schema (PR #8). Delete it and restart.")
 
     def _q(self, sql: str, args=()) -> list[dict]:
         with self.lock:
