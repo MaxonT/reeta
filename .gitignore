@@ -24,3 +24,6 @@ frontend/dist/
 .DS_Store
 .vscode/
 .idea/
+
+alembic.ini
+backend/migrations/
