@@ -3,17 +3,20 @@ import json
 import mimetypes
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
+from .accounts import Accounts
+from .classwork import Classwork
 from .config import settings
 from .content import load_answer_key, load_exam
 from .llm.base import get_llm_client
 from .repo.base import get_repository
 from .service import ReetaService
-from .sources import SourceError
+from .sessions import is_reserved, notes_session_for, topic_of
+from .sources import MAX_UPLOAD_BYTES, SourceError
 from .speech.base import get_speech_client
 
 
@@ -30,8 +33,13 @@ def build_service() -> ReetaService:
 app = FastAPI(title="Reeta: teach the AI student")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 svc = build_service()
+accounts = Accounts(svc.repo, settings.pass_threshold)
+app.include_router(accounts.router)
+classwork = Classwork(svc, accounts, MAX_UPLOAD_BYTES)
+app.include_router(classwork.router)
 
-Session = Header(default="demo", alias="X-Session-Id")
+# Logged in: the account's session. Otherwise the X-Session-Id header, default "demo".
+Session = Depends(accounts.session_id)
 
 
 def _no_longer_supported(what: str):
@@ -90,9 +98,9 @@ def lectures(session_id: str = Session):
 
 
 @app.get("/lectures/{lecture_id}/audio")
-def lecture_audio(lecture_id: int):
+def lecture_audio(lecture_id: int, session_id: str = Session):
     lec = svc.repo.get_lecture(lecture_id)
-    if not lec or not lec["audio_path"] or not Path(lec["audio_path"]).exists():
+    if not lec or lec["session_id"] != session_id or not lec["audio_path"] or not Path(lec["audio_path"]).exists():
         raise HTTPException(404, "No audio for this Lecture")
     return FileResponse(lec["audio_path"])
 
@@ -108,12 +116,12 @@ async def post_source(
     text: str | None = Form(default=None, description="pasted notes, used when no file is sent"),
     session_id: str = Session,
 ):
-    """Add source material the exam questions are written from. A file (.txt, .md) or pasted text."""
+    """Add source material the exam questions are written from. A file (.txt, .md, .pdf, .docx) or pasted text."""
+    _no_topic_notes(session_id)
     data = None
     if file:
-        limit = settings.max_source_chars * 4  # a utf-8 character is at most 4 bytes
-        data = await file.read(limit + 1)
-        if len(data) > limit:
+        data = await file.read(MAX_UPLOAD_BYTES + 1)
+        if len(data) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "That file is too large.")
     try:
         return svc.add_source(session_id, file.filename if file else None, data, text)
@@ -121,13 +129,20 @@ async def post_source(
         raise HTTPException(exc.status, str(exc)) from exc
 
 
+def _no_topic_notes(session_id: str):
+    if topic_of(session_id) is not None:
+        raise HTTPException(403, "A topic's notes come from your teacher.")
+
+
 @app.get("/sources")
 def sources(session_id: str = Session):
-    return {"sources": svc.list_sources(session_id)}
+    """On a topic: the teacher's notes for it."""
+    return {"sources": svc.list_sources(notes_session_for(session_id))}
 
 
 @app.delete("/sources/{source_id}")
 def delete_source(source_id: int, session_id: str = Session):
+    _no_topic_notes(session_id)
     if not svc.delete_source(session_id, source_id):
         raise HTTPException(404, "Source not found")
     return {"ok": True}
@@ -148,6 +163,11 @@ def run_exam(questions: int = 5, source: str | None = None, session_id: str = Se
     `source` (llm | fixed) overrides QUESTION_SOURCE for this run."""
     if source not in (None, "llm", "fixed"):
         raise HTTPException(400, "source must be llm or fixed")
+    topic_id = topic_of(session_id)
+    if topic_id is not None:  # the teacher sets a topic's quiz length, and its notes are the only material
+        if not svc.repo.list_sources(notes_session_for(session_id)):
+            raise HTTPException(409, "Your teacher has not added notes for this topic yet.")
+        questions = classwork.questions_for(topic_id) or questions
     return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)), source)),
                              media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -170,5 +190,7 @@ def report(session_id: str = Session):
 
 @app.post("/session/reset")
 def reset(session_id: str = Session):
+    if is_reserved(session_id):  # an account's attempts are its gradebook
+        raise HTTPException(403, "Accounts cannot be reset.")
     svc.repo.reset_session(session_id)
     return {"ok": True}
