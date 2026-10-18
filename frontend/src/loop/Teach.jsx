@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { api } from '../lib/api.js'
 import { useRecorder } from '../lib/useRecorder.js'
 import { lines } from '../lib/reetaLines.js'
+import { play } from '../lib/sfx.js'
 import Reeta from './Reeta.jsx'
 import { TopBar } from './ui.jsx'
 
@@ -55,6 +56,7 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
     setError(null)
     try {
       await rec.start()
+      play('micOn')
       if (!pressing.current) await end(true) // released before the mic was ready
     } catch (e) {
       pressing.current = false
@@ -68,6 +70,11 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
     pressing.current = false
     const out = await rec.stop()
     if (!out) return
+    play('micOff')
+    if (!out.blob.size && !out.sentences.length) { // a tap too short to record anything; the server would 400
+      setError('I didn’t catch any words. Try again a little closer to the mic?')
+      return
+    }
     await upload({ blob: out.blob, sentences: out.sentences })
   }
 
@@ -79,6 +86,7 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
       setLecture(res.lecture)
       setWarning(res.warning || null)
       setPhase('done')
+      play('sent')
     } catch (e) {
       setError(e.message.startsWith('POST') ? 'Something went wrong saving my notes. Try once more?' : e.message)
       setPhase('idle')
@@ -88,11 +96,14 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
   function again() { setPhase('idle'); setLecture(null); setWarning(null); setTyped('') }
 
   const live = [...rec.live.finals.map((f) => f.text), rec.live.interim].filter(Boolean).join(' ')
-  const mood = rec.recording ? 'listening' : phase === 'processing' ? 'thinking' : phase === 'done' ? 'proud' : 'listening'
-  const say = rec.recording ? lines.recording
+  const mood = rec.recording ? 'listening' : phase === 'processing' ? 'thinking' : phase === 'done' ? 'cheer' : 'listening'
+  // Random variants are picked once per phase, not on every timer tick, so the bubble does not flicker.
+  const say = useMemo(() => (
+    rec.recording ? lines.recording
     : phase === 'processing' ? lines.processing
-    : phase === 'done' ? lines.transcriptDone
+    : phase === 'done' ? (fix ? lines.transcriptFixDone : lines.transcriptDone)
     : fix ? lines.teachFix : lines.teachIdle
+  ), [rec.recording, phase, !!fix])
   const notesName = !sources?.length ? 'Python recursion' : sources.length === 1 ? sources[0].filename : 'your notes'
   const secsLeft = Math.max(0, Math.ceil((LIMIT_MS - elapsed) / 1000))
 
@@ -102,7 +113,9 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
 
       <div className="lp-body lp-teach">
         {fix
-          ? <div className="lp-context is-fix"><span className="lp-context-label">Fix this one</span>{fix.prompt}</div>
+          ? <div className="lp-context is-fix">
+              <span className="lp-context-label">{fix.total > 1 ? `Fix ${fix.step + 1} of ${fix.total}` : 'Fix this one'}</span>{fix.prompt}
+            </div>
           : <div className="lp-context">Teach anything from <b>{notesName}</b>. She is quizzed on it next.</div>}
 
         <Reeta mood={mood} size={phase === 'done' ? 132 : 176} say={say} idle={phase === 'idle'} pulse={rec.recording} />
@@ -112,6 +125,14 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
             <span className="lp-live-label">{rec.recording ? 'Listening' : 'You said'}</span>
             <p>{live || typed || '…'}</p>
           </div>
+        )}
+
+        {phase === 'done' && lecture && (
+          <motion.div className="lp-cheer" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+            transition={{ type: 'spring', stiffness: 320, damping: 16 }} role="status">
+            <span aria-hidden="true">🎉</span>
+            <span><b>Lesson sent!</b> You’re helping Reeta get it.</span>
+          </motion.div>
         )}
 
         {phase === 'done' && lecture && (
@@ -128,7 +149,9 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
 
         {phase === 'done' ? (
           <>
-            <button className="lp-btn lp-btn-primary lp-btn-xl" onClick={() => onTaught(lecture)}>Quiz Reeta</button>
+            <button className="lp-btn lp-btn-primary lp-btn-xl" onClick={() => onTaught(lecture)}>
+              {fix && fix.step + 1 < fix.total ? `Next question (${fix.step + 2} of ${fix.total})` : 'Quiz Reeta'}
+            </button>
             <button className="lp-link" onClick={again}>Teach more first</button>
           </>
         ) : (
@@ -165,7 +188,7 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
                 <textarea id="lp-typed" rows={4} value={typed} disabled={phase === 'processing'} autoFocus
                   onChange={(e) => setTyped(e.target.value)}
                   onKeyDown={(e) => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && typed.trim()) upload({ text: typed }) }}
-                  placeholder={fix ? 'Explain it again, in your own words…' : 'A recursive function is a function that calls itself…'} />
+                  placeholder={fix ? 'Explain it again, in your own words…' : ''} />
                 <button className="lp-btn lp-btn-primary lp-btn-xl" disabled={!typed.trim() || phase === 'processing'}
                   onClick={() => upload({ text: typed })}>{phase === 'processing' ? 'Reeta is taking notes…' : 'Teach this'}</button>
               </div>

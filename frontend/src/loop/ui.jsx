@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { isMuted, onMutedChange, play, setMuted } from '../lib/sfx.js'
 
 // Small shared pieces of the loop chrome.
 
@@ -21,6 +23,23 @@ export function Streak({ count = 0, bump = false }) {
   )
 }
 
+export function MuteButton() {
+  const [muted, setM] = useState(isMuted)
+  useEffect(() => onMutedChange(setM), [])
+  return (
+    <button className={`lp-icon-btn lp-mute ${muted ? 'is-muted' : ''}`} aria-pressed={muted}
+      aria-label={muted ? 'Turn sound on' : 'Turn sound off'} title={muted ? 'Sound off' : 'Sound on'}
+      onClick={() => { setMuted(!muted); if (muted) play('sent') }}>
+      <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5H4Z" fill="currentColor" />
+        {muted
+          ? <path d="m16 9.5 5 5m0-5-5 5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          : <path d="M15.5 9a4 4 0 0 1 0 6m2.2-8.4a7 7 0 0 1 0 10.8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" fill="none" />}
+      </svg>
+    </button>
+  )
+}
+
 export function TopBar({ onClose, title, children }) {
   return (
     <div className="lp-top">
@@ -30,7 +49,7 @@ export function TopBar({ onClose, title, children }) {
           </button>
         : <div className="lp-brand">Reeta</div>}
       {title && <div className="lp-top-title">{title}</div>}
-      <div className="lp-top-right">{children}</div>
+      <div className="lp-top-right">{children}<MuteButton /></div>
     </div>
   )
 }

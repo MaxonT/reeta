@@ -49,3 +49,13 @@ def load_exam(content_dir: Path, key: AnswerKey) -> list[dict]:
             assert mid in key.misconception_ids, f"{q['id']}: unknown misconception {mid}"
             assert opt in q["options"], f"{q['id']}: distractor {opt!r} not in options"
     return questions
+
+
+def load_fixed_questions(path: Path) -> list[dict]:
+    """[{prompt, reference_answer}] for QUESTION_SOURCE=fixed. Fails loudly on a malformed file."""
+    questions = json.loads(path.read_text(encoding="utf-8"))["questions"]
+    for i, q in enumerate(questions, 1):
+        for field_name in ("prompt", "reference_answer"):
+            assert isinstance(q.get(field_name), str) and q[field_name].strip(), f"{path.name} #{i}: missing {field_name}"
+    assert questions, f"{path.name}: no questions"
+    return [{"prompt": q["prompt"].strip(), "reference_answer": q["reference_answer"].strip()} for q in questions]

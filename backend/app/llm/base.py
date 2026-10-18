@@ -149,5 +149,10 @@ def get_llm_client(provider: str) -> LLMClient:
         return FallbackLLMClient(OpenAIClient(), MockLLMClient())
     if provider == "oci":
         from .oci_genai import OCIGenAIClient
-        return FallbackLLMClient(OCIGenAIClient(), MockLLMClient())
+        from ..config import settings
+        backup: LLMClient = MockLLMClient()
+        if settings.openai_api_key:  # OCI -> OpenAI -> Mock
+            from .openai_client import OpenAIClient
+            backup = FallbackLLMClient(OpenAIClient(), backup)
+        return FallbackLLMClient(OCIGenAIClient(), backup)
     raise ValueError(f"unknown LLM_PROVIDER {provider!r}")

@@ -1,11 +1,12 @@
 """Business logic. Talks only to the SpeechClient / LLMClient / Repository interfaces."""
+import random
 from collections import deque
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .content import AnswerKey
-from .exam import AnswerStream, transcripts_text, verify_quote
+from .content import AnswerKey, load_fixed_questions
+from .exam import AnswerStream, transcripts_text, verify_quotes
 from .grading import CORRECT, MISCONCEPTION, NOT_TAUGHT, concept_status, grade_exam
 from .llm.base import RESET, LLMClient, template_phrase
 from .repo.base import Repository
@@ -17,8 +18,13 @@ from .words import sentences_to_words
 class ReetaService:
     def __init__(self, repo: Repository, speech: SpeechClient, llm: LLMClient, key: AnswerKey,
                  audio_dir: Path, pass_threshold: float = 1.0,
-                 max_source_chars: int = 50_000, max_notes_chars: int = 60_000):
+                 max_source_chars: int = 50_000, max_notes_chars: int = 60_000, question_source: str = "llm",
+                 question_file: Path | None = None, question_shuffle: bool = False):
         self.repo, self.speech, self.llm, self.key = repo, speech, llm, key
+        self.question_source = question_source
+        self.question_file = question_file  # JSON of fixed questions, used when the source is "fixed"
+        self.question_shuffle = question_shuffle  # fixed: a random pick each run, else the first n in file order
+        self.rng = random.Random()
         self.audio_dir = audio_dir
         self.pass_threshold = pass_threshold
         self.max_source_chars, self.max_notes_chars = max_source_chars, max_notes_chars
@@ -75,12 +81,28 @@ class ReetaService:
 
     # 4. Live exam: questions from the course notes, Reeta answers from the transcripts, a judge grades.
     # A generator of {"event", "data"} dicts so the endpoint can stream them as they happen.
-    def run_exam(self, session_id: str, n: int = 5) -> Iterator[dict]:
-        lectures = self.repo.list_lectures(session_id)
+    def _written_questions(self, session_id: str, n: int, source: str) -> list[dict]:
+        """[{prompt, reference_answer}] from the LLM question writer, or n from the fixed question file
+        (in file order, or a random pick when question_shuffle is on)."""
+        if source == "fixed":
+            if not self.question_file:
+                raise ValueError("QUESTION_SOURCE=fixed needs a question file")
+            fixed = load_fixed_questions(self.question_file)  # re-read each call, so edits show up without a restart
+            n = min(n, len(fixed))
+            return self.rng.sample(fixed, n) if self.question_shuffle else fixed[:n]
+        notes = combine_sources(self.repo.list_sources(session_id), self.max_notes_chars)  # None: default notes
+        return self.llm.generate_questions(self.key, n, notes)
+
+    def run_exam(self, session_id: str, n: int = 5, source: str | None = None) -> Iterator[dict]:
+        source = (source or self.question_source).lower()
+        # Reeta knows the newest lecture plus the office hours recorded after it. Older lectures drop out, and
+        # blank ones (a failed upload) are skipped.
+        taught = [lec for lec in self.repo.list_lectures(session_id) if (lec.get("text") or "").strip()]
+        start = max((i for i, lec in enumerate(taught) if lec["kind"] == "lecture"), default=0)
+        lectures = taught[start:]
         transcripts = transcripts_text(lectures)
         try:
-            notes = combine_sources(self.repo.list_sources(session_id), self.max_notes_chars)  # None: default notes
-            questions = [{"id": f"q{i}", **q} for i, q in enumerate(self.llm.generate_questions(self.key, n, notes), 1)]
+            questions = [{"id": f"q{i}", **q} for i, q in enumerate(self._written_questions(session_id, n, source), 1)]
         except Exception as exc:  # noqa: BLE001
             yield {"event": "error", "data": {"message": f"Could not write the exam: {exc}"}}
             return
@@ -122,8 +144,9 @@ class ReetaService:
                         text = stream.feed(chunk)
                         if text:
                             yield {"event": "answer_delta", "data": {"id": q["id"], "text": text}}
-                    line, quote_raw = stream.finish()
-                    found = verify_quote(quote_raw, lectures)  # never trust the model's quote
+                    line, quotes_raw = stream.finish_all()
+                    verified = verify_quotes(quotes_raw, lectures)  # never trust the model's quotes
+                    found = verified[0] if verified else None  # the first one fills the single quote fields
                     row = {"question_id": q["id"], "prompt": q["prompt"], "reference_answer": q["reference_answer"],
                            "answer": line if found else None, "line": line, "is_correct": False,
                            "reason": "not_taught", "feedback": None, "lecture_id": None, "quote": None,
@@ -134,13 +157,18 @@ class ReetaService:
                     yield {"event": "answer_done", "data": {
                         "id": q["id"], "line": line, "supported": bool(found), "lecture_id": row["lecture_id"],
                         "quote": row["quote"], "quote_start_ms": row["quote_start_ms"],
-                        "quote_end_ms": row["quote_end_ms"]}}
+                        "quote_end_ms": row["quote_end_ms"],
+                        "quotes": [{"lecture_id": f["lecture_id"], "quote": f["quote"],
+                                    "quote_start_ms": f["start_ms"], "quote_end_ms": f["end_ms"]} for f in verified]}}
                     if found:
+                        # the judge sees every verified passage, so a claim none of them states is unsupported
+                        passages = " [...] ".join(f["quote"] for f in verified)
                         pending.append((row, pool.submit(self.llm.judge, q["prompt"], q["reference_answer"], line,
-                                                         found["quote"])))
+                                                         passages)))
                     else:
-                        row["feedback"] = ("You never taught Reeta this." if not quote_raw
-                                           else "Reeta's quote is not in your lectures, so it does not count.")
+                        row["feedback"] = ("You never taught Reeta this." if not quotes_raw
+                                           else f"Reeta's quote is not in your lectures, so it does not count: "
+                                                f"“{quotes_raw[0][:200]}”")
                         pending.append((row, None))
                     yield from flush(block=False)
                 yield from flush(block=True)

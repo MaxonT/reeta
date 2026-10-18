@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import Reeta from './Reeta.jsx'
 import { Streak, TopBar } from './ui.jsx'
 import { lines } from '../lib/reetaLines.js'
@@ -5,6 +6,7 @@ import { lines } from '../lib/reetaLines.js'
 // Home: Reeta asks to be taught. One big button, plus the course notes her quiz is written from.
 export default function Home({ today, sources, onTeach, onNotes }) {
   const loading = sources === null
+  const hello = useMemo(() => lines.home(today), [today.mood, today.streak])
   const notes = !sources?.length ? 'Python recursion (default)'
     : sources.length === 1 ? sources[0].filename : `${sources.length} files`
   return (
@@ -15,7 +17,7 @@ export default function Home({ today, sources, onTeach, onNotes }) {
 
       <div className="lp-body lp-home">
         <Reeta mood={loading ? 'thinking' : today.mood} size={232}
-          say={loading ? 'Finding my notebook…' : lines.home(today)} idle />
+          say={loading ? 'Finding my notebook…' : hello} idle />
         {today.last && (
           <p className="lp-last">Last quiz <b>{today.last.score}/{today.last.total}</b>{today.last.passed ? ' · passed' : ''}</p>
         )}

@@ -37,7 +37,9 @@ class OracleRepository(Repository):
             user=settings.oracle_user, password=settings.oracle_password, dsn=settings.oracle_dsn,
             config_dir=wallet, wallet_location=wallet,
             wallet_password=settings.oracle_wallet_password or None,
-            min=1, max=4, increment=1)
+            min=1, max=4, increment=1,
+            ping_interval=0,  # validate on every acquire so a connection dropped while idle is replaced
+            expire_time=1)    # keepalive probe every minute to stop idle drops
         with self.pool.acquire() as conn, conn.cursor() as cur:
             for stmt in _SCHEMA.split("\n/\n"):
                 stmt = "\n".join(l for l in stmt.splitlines() if not l.strip().startswith("--")).strip()
@@ -105,7 +107,8 @@ class OracleRepository(Repository):
 
     @staticmethod
     def _lecture(row: dict) -> dict:
-        return {**row, "words": json.loads(row["words"])}
+        words = row["words"]  # IS JSON columns may already arrive parsed
+        return {**row, "words": json.loads(words) if isinstance(words, (str, bytes, bytearray)) else words}
 
     def get_lecture(self, lecture_id):
         rows = self._q("SELECT * FROM lectures WHERE id=:1", (lecture_id,))

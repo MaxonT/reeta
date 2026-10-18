@@ -18,6 +18,7 @@ export function useRecorder() {
     const t0 = performance.now()
     const finals = []
     let lastEnd = 0
+    let pending = '' // interim text the recognizer hasn't finalized yet; flushed on stop so it isn't lost
     let rec = null
     if (SR) {
       rec = new SR()
@@ -35,6 +36,7 @@ export function useRecorder() {
             lastEnd = end
           } else interim += res[0].transcript
         }
+        pending = interim
         setLive({ finals: [...finals], interim })
       }
       rec.onerror = () => {}
@@ -42,13 +44,16 @@ export function useRecorder() {
       try { rec.start() } catch { /* ignore */ }
     }
     recorder.start(250)
-    r.current = { recorder, stream, rec, chunks, finals }
+    r.current = { recorder, stream, rec, chunks, finals, flush: () => {
+      const text = pending.trim()
+      if (text) finals.push({ text: capitalize(text), start_ms: lastEnd, end_ms: Math.round(performance.now() - t0) })
+    } }
     setLive({ finals: [], interim: '' })
     setRecording(true)
   }
 
   function stop() {
-    const { recorder, stream, rec, chunks, finals } = r.current
+    const { recorder, stream, rec, chunks, finals, flush } = r.current
     if (!recorder) return Promise.resolve(null)
     r.current = {}
     setRecording(false)
@@ -57,7 +62,8 @@ export function useRecorder() {
         stream.getTracks().forEach((t) => t.stop())
         // give Web Speech a moment to flush its last final result
         setTimeout(() => {
-          if (rec) { rec.onend = null; try { rec.stop() } catch { /* ignore */ } }
+          if (rec) { rec.onend = null; rec.onresult = null; try { rec.stop() } catch { /* ignore */ } }
+          flush()
           resolve({ blob: new Blob(chunks, { type: recorder.mimeType || 'audio/webm' }), sentences: finals })
         }, 400)
       }
