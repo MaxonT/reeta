@@ -1,5 +1,9 @@
 // All calls go through the Vite proxy (/api -> backend). Keys never reach the browser.
 
+// Where the backend lives. Set VITE_API_BASE_URL at build time (e.g. https://my-backend.up.railway.app/api)
+// to host the frontend separately. Unset, it is the same-origin /api (Vite dev proxy or the Docker image).
+export const API_BASE = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/+$/, '')
+
 export const SESSION = (() => { try { return localStorage.getItem('reeta_session') || 'demo' } catch { return 'demo' } })()
 
 async function req(method, path, body) {
@@ -9,7 +13,7 @@ async function req(method, path, body) {
     opts.headers['Content-Type'] = 'application/json'
     opts.body = JSON.stringify(body)
   }
-  const res = await fetch(`/api${path}`, opts)
+  const res = await fetch(`${API_BASE}${path}`, opts)
   if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${await res.text()}`)
   return res.json()
 }
@@ -33,7 +37,7 @@ export const api = {
   officeHours: () => req('GET', '/office-hours'),
   report: () => req('GET', '/report'),
   reset: () => req('POST', '/session/reset'),
-  audioUrl: (lectureId) => `/api/lectures/${lectureId}/audio`,
+  audioUrl: (lectureId) => `${API_BASE}/lectures/${lectureId}/audio`,
 
   // Source material the exam questions are written from (.txt, .md or pasted text). Per session.
   sources: () => req('GET', '/sources'),
@@ -49,7 +53,7 @@ export const api = {
   // onEvent(name, data) is called for each event in order. Resolves when the stream ends.
   // EventSource cannot POST, so this reads the body stream by hand. Abort with signal.
   runExam: async (onEvent, { questions = 3, signal } = {}) => {
-    const res = await fetch(`/api/exam/run?questions=${questions}`, { method: 'POST', headers: { 'X-Session-Id': SESSION }, signal })
+    const res = await fetch(`${API_BASE}/exam/run?questions=${questions}`, { method: 'POST', headers: { 'X-Session-Id': SESSION }, signal })
     if (!res.ok || !res.body) throw new Error(`POST /exam/run: ${res.status} ${await res.text()}`)
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
