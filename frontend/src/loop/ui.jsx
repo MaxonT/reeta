@@ -21,15 +21,6 @@ export function Streak({ count = 0, bump = false }) {
   )
 }
 
-export function Level({ name }) {
-  return (
-    <div className="lp-chip lp-level" title="Reeta's level">
-      <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 1.5 8.5 12 14l8.5-4.45V16H22V8.5L12 3Zm-6 9.6v3.6c0 1.6 2.7 3.3 6 3.3s6-1.7 6-3.3v-3.6l-6 3.1-6-3.1Z" fill="currentColor" /></svg>
-      <span>{name || 'Freshman'}</span>
-    </div>
-  )
-}
-
 export function TopBar({ onClose, title, children }) {
   return (
     <div className="lp-top">
@@ -40,19 +31,6 @@ export function TopBar({ onClose, title, children }) {
         : <div className="lp-brand">Reeta</div>}
       {title && <div className="lp-top-title">{title}</div>}
       <div className="lp-top-right">{children}</div>
-    </div>
-  )
-}
-
-// Dots for the 5 concepts. Filled = mastered.
-export function Progress({ mastered = 0, total = 5, concepts }) {
-  const dots = concepts?.length ? concepts : Array.from({ length: total }, (_, i) => ({ id: i, status: i < mastered ? 'correct' : 'missing' }))
-  return (
-    <div className="lp-progress" role="img" aria-label={`${mastered} of ${total} concepts mastered`}>
-      <div className="lp-dots">
-        {dots.map((c) => <span key={c.id} className={`lp-dot ${c.status === 'correct' ? 'is-done' : ''}`} title={c.label} />)}
-      </div>
-      <span className="lp-progress-label">{mastered}/{total} mastered</span>
     </div>
   )
 }

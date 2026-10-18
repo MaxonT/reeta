@@ -1,5 +1,4 @@
 // All calls go through the Vite proxy (/api -> backend). Keys never reach the browser.
-import { quizFallback, todayFallback, normalizeQuiz, normalizeToday } from './loopFallback.js'
 
 export const SESSION = (() => { try { return localStorage.getItem('reeta_session') || 'demo' } catch { return 'demo' } })()
 
@@ -36,23 +35,40 @@ export const api = {
   reset: () => req('POST', '/session/reset'),
   audioUrl: (lectureId) => `/api/lectures/${lectureId}/audio`,
 
-  // Daily loop. The /loop endpoints come from a parallel backend PR. Until they exist (or if they fail),
-  // both fall back to the endpoints above so the loop always works.
-  // opts: { lecture_id, concept_ids } of the lecture just taught, used to pick today's questions.
-  loopQuiz: async (opts = {}) => {
-    try {
-      return normalizeQuiz(await req('POST', '/loop/quiz', opts))
-    } catch (e) {
-      console.warn('[loop] /loop/quiz unavailable, using /exam/take fallback:', e.message)
-      return quizFallback(api, opts)
-    }
+  // Source material the exam questions are written from (.txt, .md or pasted text). Per session.
+  sources: () => req('GET', '/sources'),
+  postSource: ({ file, text }) => {
+    const fd = new FormData()
+    if (file) fd.append('file', file)
+    if (text) fd.append('text', text)
+    return req('POST', '/sources', fd)
   },
-  loopToday: async () => {
-    try {
-      return normalizeToday(await req('GET', '/loop/today'))
-    } catch (e) {
-      console.warn('[loop] /loop/today unavailable, computing from /notebook:', e.message)
-      return todayFallback(api)
+  deleteSource: (id) => req('DELETE', `/sources/${id}`),
+
+  // The live exam: POST /exam/run streams Server-Sent Events (see FRONTEND_CHANGES.md).
+  // onEvent(name, data) is called for each event in order. Resolves when the stream ends.
+  // EventSource cannot POST, so this reads the body stream by hand. Abort with signal.
+  runExam: async (onEvent, { questions = 3, signal } = {}) => {
+    const res = await fetch(`/api/exam/run?questions=${questions}`, { method: 'POST', headers: { 'X-Session-Id': SESSION }, signal })
+    if (!res.ok || !res.body) throw new Error(`POST /exam/run: ${res.status} ${await res.text()}`)
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buf = ''
+    for (;;) {
+      const { value, done } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+      let cut
+      while ((cut = buf.indexOf('\n\n')) >= 0) {
+        const block = buf.slice(0, cut)
+        buf = buf.slice(cut + 2)
+        let name = 'message', data = ''
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event:')) name = line.slice(6).trim()
+          else if (line.startsWith('data:')) data += line.slice(5).trim()
+        }
+        if (data) onEvent(name, JSON.parse(data))
+      }
     }
   },
 }

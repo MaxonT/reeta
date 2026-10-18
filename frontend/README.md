@@ -1,9 +1,9 @@
 # Reeta frontend
 
-React 18 + Vite single page app. The default view is the **daily loop**: four phone sized screens (Home, Teach,
-Quiz, Result) where you teach Reeta, the AI student, and she takes a 3 question quiz. The older six scene
-**Classroom view** is unchanged behind a small link on Home (or `#classroom`). The app holds no secrets and no
-game rules: every decision (what Reeta knows, which answers are right) comes from the backend over `/api`.
+React 18 + Vite single page app. The default view is the **daily loop**: phone sized screens (Home, Course
+notes, Teach, Quiz, Result) where you teach Reeta, the AI student, and watch her take a live 3 question exam.
+The app holds no secrets and no game rules: every decision (what the questions are, what Reeta answers, which
+answers are right) comes from the backend over `/api`.
 
 ## Run
 
@@ -23,28 +23,36 @@ backend is not running, a banner tells you how to start it. Point the proxy at a
 
 ## The daily loop
 
-1. **Home.** Reeta in her current mood, her line from `GET /loop/today`, the streak flame, her level and 5
-   concept dots. One button: Teach Reeta.
-2. **Teach.** Hold the mic button (or Space) to talk, up to 60 seconds on the ring timer, or "Type instead".
-   After `POST /lectures/audio` every proposed note is confirmed automatically (`POST /lectures/{id}/confirm`
-   with all entry ids), because Reeta believes everything you say. Her notes appear one card at a time.
-3. **Quiz.** `POST /loop/quiz`, up to 3 cards revealed one by one. A wrong answer shows "Because you said" with
-   your own sentence and a replay button. The button is gray for a typed lesson, which has no audio.
-4. **Result.** A pass gets the proud face, confetti and streak +1. A fail gets the confused face, "Fix it"
-   (back to Teach with `kind=office_hours` on the first concept she got wrong) and "Done for today".
+1. **Home.** Reeta in her current mood, her line, the streak flame and the last quiz score. A "Course notes"
+   button shows which notes the quiz is written from, and one big button: Teach Reeta. The streak and last
+   score live in `localStorage` per session (`lib/loopState.js`); the backend does not keep them.
+2. **Course notes.** Upload `.txt` / `.md` or paste notes (`POST /sources`, up to 50,000 characters), see the
+   list (`GET /sources`) and remove one (`DELETE /sources/{id}`). With no notes the backend uses the default
+   Python recursion notes. Upload errors show the backend's own `detail` text.
+3. **Teach.** Hold the mic button (or Space) to talk, up to 60 seconds on the ring timer, or "Type instead".
+   `POST /lectures/audio`, then Reeta shows what she wrote down (`lecture.text`). There is no confirm step.
+4. **Quiz.** The live exam, `POST /exam/run?questions=3`, read as Server-Sent Events with `fetch` (see
+   `api.runExam`). All questions are listed first. Reeta types each answer as it streams in, then each one is
+   graded: correct, wrong, or never taught. Under the answer, the exact words of your lecture she relied on are
+   highlighted (by word timings for recordings, by text match for typed lessons), with a replay button when
+   there is a recording. Leaving the screen aborts the stream.
+5. **Result.** A pass gets the proud face, confetti and streak +1. A fail lists what she got wrong, with "Fix it"
+   (back to Teach with `kind=office_hours` on the first wrong question) and "Done for today".
 
-If `/loop/quiz` or `/loop/today` fails, `lib/loopFallback.js` falls back to `/exam/take` and `/notebook`.
+The old six scene classroom (`ClassroomApp.jsx`, at `#classroom`) is built on endpoints the new backend no
+longer supports, so it has no link on Home.
 
 ### Demo script
 
-Open **http://localhost:5173/#demo**. It resets the session and quietly teaches Reeta the background (base
-case, smaller problem, return propagation, see `lib/demoSeed.js`), then shows Home. Then on stage:
+Run the backend with `LLM_PROVIDER=mock` for a repeatable demo (a real LLM writes different questions). Open
+**http://localhost:5173/#demo**: it resets the session (lectures, notes, attempts) and the local streak. With
+the default notes the 3 questions are self call, base case and smaller problem. Then on stage:
 
-1. Teach Reeta, **record** (not type, so replay works): "A recursive function calls itself. All calls share the
-   same variables."
-2. Quiz: 2/3. The frames question is wrong and shows "Because you said: All calls share the same variables",
-   with your voice on replay.
-3. Fix it, record: "Each call has its own local variables in its own stack frame."
+1. Teach Reeta, **record** so replay works: "A recursive function calls itself. Each call works on a smaller
+   problem. Recursion stops by itself when it is done."
+2. Quiz: 2/3. The base case answer is wrong, and "Because you said" highlights "Recursion stops by itself when
+   it is done." in your lecture, with your voice on replay.
+3. Fix it, record: "Recursion needs a base case where it stops, otherwise it recurses forever."
 4. Quiz: 3/3, confetti, streak +1.
 
 Open `#demo` again to reset before the next run.
@@ -58,18 +66,18 @@ src/
   ClassroomApp.jsx       the six scene classroom and its shared state (answerKey, notebook, lectures, exam)
   loop/
     Loop.jsx             daily loop screen switcher and shared state; #demo handling
-    Home.jsx, Teach.jsx, Quiz.jsx, Result.jsx   the four screens
+    Home.jsx, Notes.jsx, Teach.jsx, Quiz.jsx, Result.jsx   the screens
     Reeta.jsx            Reeta's face (public/teachback) and speech bubble
-    ui.jsx               streak, level, top bar, progress dots
+    ui.jsx               streak flame and top bar
     loop.css             loop styles, scoped under .lp-app (DM Sans, one green accent)
   styles.css             all styles (chalkboard, notebook paper, red pen)
   lib/
     api.js               the only file that calls fetch: one function per backend endpoint
     useRecorder.js       push to talk hook: MediaRecorder audio + Web Speech live transcript
     clip.js              plays one sentence of the Professor's recording ([start_ms, end_ms])
-    loopFallback.js      loop data from /exam/take and /notebook when /loop/* is unavailable
+    loopState.js         streak and last quiz result in localStorage
     reetaLines.js        Reeta's fixed UI lines (recording, processing, quiz)
-    demoSeed.js          the #demo reset and background lesson
+    demoSeed.js          the #demo reset
   components/
     TeachPanel.jsx       chalkboard: record or type, upload, then confirm the AI student's notes
     ConceptMap.jsx       React Flow map of the 5 concepts, colored by Notebook status
@@ -93,9 +101,9 @@ instead of fetching on their own, so every scene sees the same Notebook. The onl
 
 | Scene / component | Backend call (via `lib/api.js`) | What it shows |
 |-------------------|---------------------------------|---------------|
-| Loop Home         | `GET /loop/today` | mood, line, streak, level, progress |
-| Loop Teach        | `POST /lectures/audio`, then `POST /lectures/{id}/confirm` (all entries) | Reeta's notes |
-| Loop Quiz         | `POST /loop/quiz`, `GET /lectures/{id}/audio` (in `clip.js`) | 3 answers, your sentence and voice |
+| Loop Home / Notes | `GET /sources`, `POST /sources`, `DELETE /sources/{id}` | which notes the quiz uses |
+| Loop Teach        | `POST /lectures/audio` | what Reeta wrote down |
+| Loop Quiz         | `POST /exam/run` (stream), `GET /lectures`, `GET /lectures/{id}/audio` (in `clip.js`) | live answers, grades, your highlighted words and voice |
 | ClassroomApp (on load) | `GET /answer-key`, `GET /notebook`, `GET /lectures` | concept labels, current Notebook |
 | TeachPanel        | `POST /lectures/audio`, then `POST /lectures/{id}/confirm` | proposed notes, then the updated Notebook |
 | NotebookScene     | uses `notebook` from App | 5 nodes: green correct, red misconception, gray never taught |
