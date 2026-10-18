@@ -12,9 +12,11 @@ oracledb.defaults.fetch_lobs = False  # CLOBs come back as plain str
 
 _SCHEMA = (Path(__file__).parent / "oracle_schema.sql").read_text()
 _LECTURE_FIELDS = {"audio_path", "text", "words"}
+_TOPIC_FIELDS = {"title", "instructions", "questions_per_quiz"}
+_USER_COLS = "id, email, name, role, created_at"  # everything but password_hash
 # Oracle stores '' as NULL, so empty text is written as a single space and mapped back on read.
 _EMPTY = " "
-_TEXT_COLS = ("text", "prompt", "reference_answer")
+_TEXT_COLS = ("text", "prompt", "reference_answer", "instructions")
 
 
 def _clean(row: dict) -> dict:
@@ -181,3 +183,101 @@ class OracleRepository(Repository):
             cur.execute("DELETE FROM lectures WHERE session_id=:1", [session_id])
             cur.execute("DELETE FROM sources WHERE session_id=:1", [session_id])
             conn.commit()
+
+    # Accounts
+    def _insert_unique(self, sql: str, args) -> int | None:
+        with self.pool.acquire() as conn, conn.cursor() as cur:
+            try:
+                new_id = self._insert(cur, sql, args)
+            except oracledb.IntegrityError:  # ORA-00001 unique constraint
+                return None
+            conn.commit()
+            return new_id
+
+    def create_user(self, email, name, role, password_hash):
+        return self._insert_unique("INSERT INTO users (email, name, role, password_hash) VALUES (:1,:2,:3,:4)",
+                                   [email, name, role, password_hash])
+
+    def get_user(self, user_id):
+        rows = self._q(f"SELECT {_USER_COLS} FROM users WHERE id=:1", (user_id,))
+        return rows[0] if rows else None
+
+    def get_user_by_email(self, email):
+        rows = self._q("SELECT * FROM users WHERE email=:1", (email,))
+        return rows[0] if rows else None
+
+    def create_token(self, token_hash, user_id, expires_at):
+        self._x("INSERT INTO auth_tokens (token_hash, user_id, expires_at) VALUES (:1,:2,:3)",
+                (token_hash, user_id, expires_at))
+
+    def user_for_token(self, token_hash, now):
+        rows = self._q(f"SELECT {_USER_COLS} FROM users WHERE id = "
+                       "(SELECT user_id FROM auth_tokens WHERE token_hash=:1 AND expires_at > :2)", (token_hash, now))
+        return rows[0] if rows else None
+
+    def delete_token(self, token_hash):
+        self._x("DELETE FROM auth_tokens WHERE token_hash=:1", (token_hash,))
+
+    # Classes
+    def create_class(self, teacher_id, name, join_code):
+        return self._insert_unique("INSERT INTO classes (teacher_id, name, join_code) VALUES (:1,:2,:3)",
+                                   [teacher_id, name, join_code])
+
+    def get_class(self, class_id):
+        rows = self._q("SELECT * FROM classes WHERE id=:1", (class_id,))
+        return rows[0] if rows else None
+
+    def class_by_code(self, join_code):
+        rows = self._q("SELECT * FROM classes WHERE join_code=:1", (join_code,))
+        return rows[0] if rows else None
+
+    def list_teacher_classes(self, teacher_id):
+        return self._q("SELECT c.*, (SELECT COUNT(*) FROM class_members m WHERE m.class_id = c.id) AS student_count "
+                       "FROM classes c WHERE c.teacher_id=:1 ORDER BY c.id", (teacher_id,))
+
+    def list_student_classes(self, student_id):
+        return self._q("SELECT c.*, u.name AS teacher_name FROM class_members m JOIN classes c ON c.id = m.class_id "
+                       "JOIN users u ON u.id = c.teacher_id WHERE m.student_id=:1 ORDER BY m.joined_at, c.id",
+                       (student_id,))
+
+    def add_member(self, class_id, student_id):
+        with self.pool.acquire() as conn, conn.cursor() as cur:
+            try:
+                cur.execute("INSERT INTO class_members (class_id, student_id) VALUES (:1,:2)", [class_id, student_id])
+            except oracledb.IntegrityError:  # already a member
+                return False
+            conn.commit()
+            return True
+
+    def list_members(self, class_id):
+        cols = ", ".join(f"u.{c.strip()}" for c in _USER_COLS.split(","))
+        return self._q(f"SELECT {cols}, m.joined_at FROM class_members m JOIN users u ON u.id = m.student_id "
+                       "WHERE m.class_id=:1 ORDER BY u.name, u.id", (class_id,))
+
+    def is_member(self, class_id, student_id):
+        return bool(self._q("SELECT 1 FROM class_members WHERE class_id=:1 AND student_id=:2", (class_id, student_id)))
+
+    # Topics
+    def create_topic(self, class_id, title, instructions, questions_per_quiz):
+        with self.pool.acquire() as conn, conn.cursor() as cur:
+            tid = self._insert(cur, "INSERT INTO topics (class_id, title, instructions, questions_per_quiz) "
+                                    "VALUES (:1,:2,:3,:4)", [class_id, title, instructions or None, questions_per_quiz])
+            conn.commit()
+            return tid
+
+    def get_topic(self, topic_id):
+        rows = self._q("SELECT * FROM topics WHERE id=:1", (topic_id,))
+        return rows[0] if rows else None
+
+    def list_topics(self, class_id):
+        return self._q("SELECT * FROM topics WHERE class_id=:1 ORDER BY id", (class_id,))
+
+    def update_topic(self, topic_id, **fields):
+        bad = set(fields) - _TOPIC_FIELDS
+        if bad:
+            raise ValueError(f"cannot update {bad}")
+        if "instructions" in fields:
+            fields["instructions"] = fields["instructions"] or None  # Oracle stores '' as NULL anyway
+        if fields:
+            cols = ", ".join(f"{k}=:{i}" for i, k in enumerate(fields, 1))
+            self._x(f"UPDATE topics SET {cols} WHERE id=:{len(fields) + 1}", (*fields.values(), topic_id))

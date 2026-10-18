@@ -1,18 +1,20 @@
 // Daily loop state the backend does not keep: the streak and the last quiz result. It lives in
-// localStorage per session, so every storage access is guarded (private windows can block it).
+// localStorage per session (per account when logged in), so every storage access is guarded
+// (private windows can block it).
 import { SESSION } from './api.js'
+import { currentAuth } from './auth.js'
 
-const KEY = `reeta_loop_${SESSION}`
+const key = () => `reeta_loop_${currentAuth() ? `user:${currentAuth().user.id}` : SESSION}`
 const EMPTY = { streak: 0, best: 0, lastPassDay: null, last: null } // last: {day, score, total, passed}
 
 export function readLoopState() {
-  try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(KEY) || '{}') } } catch { return { ...EMPTY } }
+  try { return { ...EMPTY, ...JSON.parse(localStorage.getItem(key()) || '{}') } } catch { return { ...EMPTY } }
 }
 function write(v) {
-  try { localStorage.setItem(KEY, JSON.stringify(v)) } catch { /* storage blocked */ }
+  try { localStorage.setItem(key(), JSON.stringify(v)) } catch { /* storage blocked */ }
 }
 export function clearLoopState() {
-  try { localStorage.removeItem(KEY) } catch { /* storage blocked */ }
+  try { localStorage.removeItem(key()) } catch { /* storage blocked */ }
 }
 
 export function dayKey(d = new Date()) {

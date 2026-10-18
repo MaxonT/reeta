@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
-import { api } from '../lib/api.js'
+import { api, errorDetail } from '../lib/api.js'
 import { playClip, stopClip } from '../lib/clip.js'
 import { recordQuiz } from '../lib/loopState.js'
 import { lines } from '../lib/reetaLines.js'
@@ -87,7 +87,8 @@ export default function Quiz({ onClose, onDone }) {
     try {
       await api.runExam((name, d) => { queue.current.push([name, d]); pump() }, { questions: QUESTIONS, signal: ctrl.current.signal })
     } catch (e) {
-      if (e.name !== 'AbortError') setError('Reeta lost her connection to the classroom. Try the quiz again?')
+      // the backend's own reason when it gave one (e.g. a topic without notes), else a lost connection
+      if (e.name !== 'AbortError') setError(errorDetail(e) || 'Reeta lost her connection to the classroom. Try the quiz again?')
     }
   }
   useEffect(() => {

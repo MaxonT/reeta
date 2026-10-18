@@ -18,8 +18,8 @@ def test_extract_text_reads_txt_and_md_and_normalises():
 
 def test_extract_text_refuses_bad_uploads_with_the_right_status():
     with pytest.raises(SourceError) as e:
-        extract_text("slides.pdf", b"%PDF", 100)
-    assert e.value.status == 400 and ".pdf" in str(e.value)
+        extract_text("slides.pptx", b"PK", 100)
+    assert e.value.status == 400 and ".pptx" in str(e.value) and ".pdf" in str(e.value) and ".docx" in str(e.value)
     with pytest.raises(SourceError) as e:
         extract_text("noext", b"text", 100)
     assert e.value.status == 400

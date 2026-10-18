@@ -7,6 +7,8 @@ from .base import Repository
 
 _SCHEMA = (Path(__file__).parent / "schema.sql").read_text()
 _LECTURE_FIELDS = {"audio_path", "text", "words"}
+_TOPIC_FIELDS = {"title", "instructions", "questions_per_quiz"}
+_USER_COLS = "id, email, name, role, created_at"  # everything but password_hash
 
 
 class SQLiteRepository(Repository):
@@ -118,3 +120,90 @@ class SQLiteRepository(Repository):
             c.execute("DELETE FROM exam_attempts WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM lectures WHERE session_id=?", (session_id,))
             c.execute("DELETE FROM sources WHERE session_id=?", (session_id,))
+
+    # Accounts
+    def _insert_unique(self, sql: str, args) -> int | None:
+        try:
+            return self._x(sql, args)
+        except sqlite3.IntegrityError:
+            return None
+
+    def create_user(self, email, name, role, password_hash):
+        return self._insert_unique("INSERT INTO users (email, name, role, password_hash) VALUES (?,?,?,?)",
+                                   (email, name, role, password_hash))
+
+    def get_user(self, user_id):
+        rows = self._q(f"SELECT {_USER_COLS} FROM users WHERE id=?", (user_id,))
+        return rows[0] if rows else None
+
+    def get_user_by_email(self, email):
+        rows = self._q("SELECT * FROM users WHERE email=?", (email,))
+        return rows[0] if rows else None
+
+    def create_token(self, token_hash, user_id, expires_at):
+        self._x("INSERT INTO auth_tokens (token_hash, user_id, expires_at) VALUES (?,?,?)",
+                (token_hash, user_id, expires_at))
+
+    def user_for_token(self, token_hash, now):
+        rows = self._q(f"SELECT {_USER_COLS} FROM users WHERE id = "
+                       "(SELECT user_id FROM auth_tokens WHERE token_hash=? AND expires_at > ?)", (token_hash, now))
+        return rows[0] if rows else None
+
+    def delete_token(self, token_hash):
+        self._x("DELETE FROM auth_tokens WHERE token_hash=?", (token_hash,))
+
+    # Classes
+    def create_class(self, teacher_id, name, join_code):
+        return self._insert_unique("INSERT INTO classes (teacher_id, name, join_code) VALUES (?,?,?)",
+                                   (teacher_id, name, join_code))
+
+    def get_class(self, class_id):
+        rows = self._q("SELECT * FROM classes WHERE id=?", (class_id,))
+        return rows[0] if rows else None
+
+    def class_by_code(self, join_code):
+        rows = self._q("SELECT * FROM classes WHERE join_code=?", (join_code,))
+        return rows[0] if rows else None
+
+    def list_teacher_classes(self, teacher_id):
+        return self._q("SELECT c.*, (SELECT COUNT(*) FROM class_members m WHERE m.class_id = c.id) AS student_count "
+                       "FROM classes c WHERE c.teacher_id=? ORDER BY c.id", (teacher_id,))
+
+    def list_student_classes(self, student_id):
+        return self._q("SELECT c.*, u.name AS teacher_name FROM class_members m JOIN classes c ON c.id = m.class_id "
+                       "JOIN users u ON u.id = c.teacher_id WHERE m.student_id=? ORDER BY m.joined_at, c.id",
+                       (student_id,))
+
+    def add_member(self, class_id, student_id):
+        with self.lock, self.conn:
+            cur = self.conn.execute("INSERT OR IGNORE INTO class_members (class_id, student_id) VALUES (?,?)",
+                                    (class_id, student_id))
+            return cur.rowcount > 0
+
+    def list_members(self, class_id):
+        cols = ", ".join(f"u.{c.strip()}" for c in _USER_COLS.split(","))
+        return self._q(f"SELECT {cols}, m.joined_at FROM class_members m JOIN users u ON u.id = m.student_id "
+                       "WHERE m.class_id=? ORDER BY u.name, u.id", (class_id,))
+
+    def is_member(self, class_id, student_id):
+        return bool(self._q("SELECT 1 FROM class_members WHERE class_id=? AND student_id=?", (class_id, student_id)))
+
+    # Topics
+    def create_topic(self, class_id, title, instructions, questions_per_quiz):
+        return self._x("INSERT INTO topics (class_id, title, instructions, questions_per_quiz) VALUES (?,?,?,?)",
+                       (class_id, title, instructions, questions_per_quiz))
+
+    def get_topic(self, topic_id):
+        rows = self._q("SELECT * FROM topics WHERE id=?", (topic_id,))
+        return rows[0] if rows else None
+
+    def list_topics(self, class_id):
+        return self._q("SELECT * FROM topics WHERE class_id=? ORDER BY id", (class_id,))
+
+    def update_topic(self, topic_id, **fields):
+        bad = set(fields) - _TOPIC_FIELDS
+        if bad:
+            raise ValueError(f"cannot update {bad}")
+        if fields:
+            cols = ", ".join(f"{k}=?" for k in fields)
+            self._x(f"UPDATE topics SET {cols} WHERE id=?", (*fields.values(), topic_id))

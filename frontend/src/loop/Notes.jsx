@@ -5,7 +5,7 @@ import { TopBar } from './ui.jsx'
 
 const MAX_CHARS = 50000
 
-// Course notes: the material Reeta's quiz questions are written from. Upload .txt / .md or paste.
+// Course notes: the material Reeta’s quiz questions are written from. Upload PDF, Word (.docx), .txt / .md, or paste.
 // With no notes the backend uses the default Python recursion notes.
 export default function Notes({ sources, onChange, onClose }) {
   const [text, setText] = useState('')
@@ -60,15 +60,15 @@ export default function Notes({ sources, onChange, onClose }) {
         <div className="lp-card lp-add">
           <div className="lp-section-label">Add notes</div>
           <label className={`lp-btn lp-btn-secondary lp-file ${busy ? 'is-busy' : ''}`}>
-            <input ref={fileRef} type="file" accept=".txt,.md" disabled={busy}
+            <input ref={fileRef} type="file" accept=".txt,.md,.pdf,.docx" disabled={busy}
               onChange={(e) => e.target.files?.[0] && add({ file: e.target.files[0] })} />
-            Upload a .txt or .md file
+            Upload a PDF, Word, .txt or .md file
           </label>
           <label className="lp-sr" htmlFor="lp-paste">Paste notes</label>
           <textarea id="lp-paste" rows={5} value={text} disabled={busy} maxLength={MAX_CHARS}
             onChange={(e) => setText(e.target.value)} placeholder="Or paste your notes here…" />
           <div className="lp-add-row">
-            <span className="lp-muted">.txt, .md or pasted text · up to 50,000 characters</span>
+            <span className="lp-muted">PDF, Word (.docx), .txt, .md or pasted text · up to 50,000 characters</span>
             <button className="lp-btn lp-btn-primary" disabled={!text.trim() || busy} onClick={() => add({ text })}>
               {busy ? 'Adding…' : 'Add notes'}
             </button>

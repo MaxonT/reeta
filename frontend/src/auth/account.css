@@ -1,0 +1,57 @@
+/* Login, sign up and the student's classes. Uses the loop tokens, scoped under .lp-app like loop.css. */
+.lp-app .ac-login { align-items: stretch; gap: 16px; padding-bottom: 28px; }
+.lp-app .ac-login .lp-reeta { margin-bottom: 4px; }
+
+.lp-app .ac-tabs {
+  display: grid; grid-template-columns: 1fr 1fr; padding: 4px; border-radius: 14px;
+  background: var(--lp-page); gap: 4px;
+}
+.lp-app .ac-tabs button {
+  min-height: 44px; border: 0; border-radius: 11px; background: transparent; cursor: pointer;
+  font-weight: 700; color: var(--lp-muted);
+}
+.lp-app .ac-tabs button.is-on { background: var(--lp-surface); color: var(--lp-ink); box-shadow: 0 1px 3px rgba(23, 35, 31, 0.1); }
+
+.lp-app .ac-roles { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; padding: 0; border: 0; }
+.lp-app .ac-roles legend { margin-bottom: 8px; }
+.lp-app .ac-role {
+  position: relative; display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; cursor: pointer;
+  border-radius: 16px; background: var(--lp-surface); box-shadow: 0 0 0 1.5px var(--lp-line);
+  transition: box-shadow 0.15s, background 0.15s;
+}
+.lp-app .ac-role input { position: absolute; opacity: 0; pointer-events: none; }
+.lp-app .ac-role span { font-size: 13px; color: var(--lp-muted); }
+.lp-app .ac-role.is-on { background: var(--lp-accent-soft); box-shadow: 0 0 0 2px var(--lp-accent); }
+.lp-app .ac-role:has(input:focus-visible) { outline: 3px solid var(--lp-focus); outline-offset: 3px; }
+
+.lp-app .ac-fields { display: flex; flex-direction: column; gap: 12px; }
+.lp-app .ac-field { display: flex; flex-direction: column; gap: 6px; }
+.lp-app .ac-field > span { font-size: 14px; font-weight: 600; color: var(--lp-ink-2); }
+.lp-app .ac-field small { font-size: 12px; color: var(--lp-muted); }
+.lp-app .ac-field input {
+  width: 100%; min-height: 50px; padding: 12px 14px; border-radius: 14px;
+  border: 1.5px solid var(--lp-line); background: var(--lp-surface); color: var(--lp-ink); font: inherit;
+}
+.lp-app .ac-field input:focus { outline: none; border-color: var(--lp-accent); box-shadow: 0 0 0 4px var(--lp-accent-soft); }
+.lp-app .ac-code-input { font-size: 22px !important; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase; text-align: center; }
+.lp-app .ac-submit { margin-top: 4px; }
+
+.lp-app .ac-who { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 16px; }
+.lp-app .ac-small-btn { min-height: 40px; padding: 8px 14px; font-size: 14px; border-radius: 12px; }
+.lp-app .ac-ok { margin: 0; padding: 10px 14px; border-radius: 12px; background: var(--lp-accent-soft); color: var(--lp-accent-press); font-size: 14px; text-align: center; font-weight: 600; }
+
+/* topic picker */
+.lp-app .ac-empty { padding: 20px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.lp-app .ac-topic-group { display: flex; flex-direction: column; gap: 10px; }
+.lp-app .ac-topic {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 14px 16px; border: 0;
+  text-align: left; cursor: pointer; transition: box-shadow 0.15s, background 0.15s;
+}
+.lp-app .ac-topic:hover { box-shadow: var(--lp-shadow), 0 0 0 1.5px var(--lp-accent); }
+.lp-app .ac-topic.is-on { background: var(--lp-accent-soft); box-shadow: 0 0 0 2px var(--lp-accent); }
+.lp-app .ac-topic-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; font-size: 17px; }
+.lp-app .ac-topic-text { font-size: 14px; color: var(--lp-ink-2); }
+.lp-app .ac-status { flex: none; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--lp-page); color: var(--lp-ink-2); }
+.lp-app .ac-status.is-practicing { background: var(--lp-gold-soft); color: #7a5a14; }
+.lp-app .ac-status.is-passed { background: var(--lp-accent-soft); color: var(--lp-accent-press); }
+.lp-app .lp-context-topic { display: block; font-weight: 700; color: var(--lp-ink); }
