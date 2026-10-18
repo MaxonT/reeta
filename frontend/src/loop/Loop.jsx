@@ -2,49 +2,48 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import { api } from '../lib/api.js'
 import { seedDemo } from '../lib/demoSeed.js'
+import { today as readToday } from '../lib/loopState.js'
 import Home from './Home.jsx'
+import Notes from './Notes.jsx'
 import Teach from './Teach.jsx'
 import Quiz from './Quiz.jsx'
 import Result from './Result.jsx'
 import './loop.css'
 
-// The daily loop: Home -> Teach -> Quiz -> Result -> (Fix it -> Teach) or Home.
+// The daily loop: Home -> Teach -> Quiz (live exam) -> Result -> (Fix it -> Teach) or Home.
+// Home -> Notes to upload the course material the questions are written from.
 // All shared state lives here; screens call back instead of navigating on their own.
-export default function Loop({ onClassroom }) {
+export default function Loop() {
   const [screen, setScreen] = useState('home')
-  const [today, setToday] = useState(null)
-  const [answerKey, setAnswerKey] = useState(null)
+  const [today, setToday] = useState(readToday)
+  const [sources, setSources] = useState(null)   // null while loading
   const [error, setError] = useState(null)
-  const [fix, setFix] = useState(null)         // {concept_id, label} when re teaching
-  const [lesson, setLesson] = useState(null)   // {lectureId, conceptIds} of the lecture just taught
-  const [quiz, setQuiz] = useState(null)
+  const [fix, setFix] = useState(null)           // {id, prompt, reason} of the question being re taught
+  const [quiz, setQuiz] = useState(null)         // {questions, score, total, passed, streak}
   const [streakBefore, setStreakBefore] = useState(0)
 
-  async function loadToday() {
-    try { setToday(await api.loopToday()); setError(null) }
+  async function loadSources() {
+    try { setSources((await api.sources()).sources); setError(null) }
     catch { setError('Reeta can’t reach her classroom. Start the backend: uvicorn app.main:app --port 8000') }
   }
-  // #demo resets the session and seeds the background lesson (see lib/demoSeed.js), then shows Home.
+  function refresh() { setToday(readToday()); loadSources() }
+
+  // #demo resets the session and the local streak (see lib/demoSeed.js), then shows Home.
   function maybeDemo() {
     if (window.location.hash !== '#demo') return false
     history.replaceState(null, '', window.location.pathname)
-    setToday(null); setFix(null); setQuiz(null); setScreen('home')
-    seedDemo().catch((e) => console.warn('[loop] demo seed failed:', e.message)).finally(loadToday)
+    setSources(null); setFix(null); setQuiz(null); setScreen('home')
+    seedDemo().catch((e) => console.warn('[loop] demo reset failed:', e.message)).finally(refresh)
     return true
   }
   useEffect(() => {
-    api.answerKey().then(setAnswerKey).catch(() => {})
-    if (!maybeDemo()) loadToday()
+    if (!maybeDemo()) refresh()
     window.addEventListener('hashchange', maybeDemo)
     return () => window.removeEventListener('hashchange', maybeDemo)
   }, [])
 
-  const label = (id) => answerKey?.concepts.find((c) => c.id === id)?.label || id
-
-  function startTeach(target = null) {
-    setFix(target); setQuiz(null); setScreen('teach')
-  }
-  function home() { setFix(null); setScreen('home'); loadToday() }
+  function startTeach(target = null) { setFix(target); setQuiz(null); setScreen('teach') }
+  function home() { setFix(null); setScreen('home'); refresh() }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -52,22 +51,24 @@ export default function Loop({ onClassroom }) {
         <div className="lp-phone">
           {error && <div className="lp-banner" role="alert">{error}</div>}
           <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={screen + (fix?.concept_id || '')} className="lp-screen"
+            <motion.div key={screen + (fix?.id || '')} className="lp-screen"
               initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }}
               transition={{ duration: 0.22, ease: 'easeOut' }}>
               {screen === 'home' && (
-                <Home today={today} onTeach={() => startTeach(null)} onClassroom={onClassroom} />
+                <Home today={today} sources={sources} onTeach={() => startTeach(null)} onNotes={() => setScreen('notes')} />
+              )}
+              {screen === 'notes' && (
+                <Notes sources={sources} onChange={loadSources} onClose={home} />
               )}
               {screen === 'teach' && (
-                <Teach today={today} fix={fix} label={label} onClose={home}
-                  onTaught={(l) => { setLesson(l); setStreakBefore(today?.streak || 0); setScreen('quiz') }} />
+                <Teach fix={fix} sources={sources} onClose={home}
+                  onTaught={() => { setStreakBefore(readToday().streak); setScreen('quiz') }} />
               )}
               {screen === 'quiz' && (
-                <Quiz lesson={lesson} label={label} onClose={home}
-                  onDone={(q) => { setQuiz(q); setScreen('result') }} />
+                <Quiz onClose={home} onDone={(q) => { setQuiz(q); setScreen('result') }} />
               )}
               {screen === 'result' && quiz && (
-                <Result quiz={quiz} streakBefore={streakBefore} label={label} onClose={home}
+                <Result quiz={quiz} streakBefore={streakBefore} onClose={home}
                   onFix={(target) => startTeach(target)} onDone={home} />
               )}
             </motion.div>

@@ -20,7 +20,7 @@ from .speech.base import get_speech_client
 def build_service() -> ReetaService:
     key = load_answer_key(settings.content_dir)
     repo = get_repository(settings.db_provider)
-    repo.seed_content(key.concepts, load_exam(settings.content_dir, key), key.edges)
+    repo.seed_content(load_exam(settings.content_dir, key))
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
                         key, settings.audio_dir, settings.pass_threshold,
                         settings.max_source_chars, settings.max_notes_chars)
@@ -102,14 +102,52 @@ def notebook(session_id: str = Session):
     return svc.notebook(session_id)
 
 
-@app.get("/notebook/search")
-def notebook_search(q: str = "", concept_id: str | None = None, session_id: str = Session):
-    return {"q": q, "concept_id": concept_id, "results": svc.search_notebook(session_id, q, concept_id)}
+@app.post("/sources")
+async def post_source(
+    file: UploadFile | None = File(default=None),
+    text: str | None = Form(default=None, description="pasted notes, used when no file is sent"),
+    session_id: str = Session,
+):
+    """Add source material the exam questions are written from. A file (.txt, .md) or pasted text."""
+    data = None
+    if file:
+        limit = settings.max_source_chars * 4  # a utf-8 character is at most 4 bytes
+        data = await file.read(limit + 1)
+        if len(data) > limit:
+            raise HTTPException(413, "That file is too large.")
+    try:
+        return svc.add_source(session_id, file.filename if file else None, data, text)
+    except SourceError as exc:
+        raise HTTPException(exc.status, str(exc)) from exc
 
 
-@app.get("/concepts/edges")
-def concept_edges():
-    return {"edges": [list(e) for e in svc.repo.list_edges()]}
+@app.get("/sources")
+def sources(session_id: str = Session):
+    return {"sources": svc.list_sources(session_id)}
+
+
+@app.delete("/sources/{source_id}")
+def delete_source(source_id: int, session_id: str = Session):
+    if not svc.delete_source(session_id, source_id):
+        raise HTTPException(404, "Source not found")
+    return {"ok": True}
+
+
+def _sse(events):
+    """{"event", "data"} dicts -> Server-Sent Events text. A failure mid-stream becomes an error event."""
+    try:
+        for ev in events:
+            yield f"event: {ev['event']}\ndata: {json.dumps(ev['data'])}\n\n"
+    except Exception as exc:  # noqa: BLE001
+        yield f"event: error\ndata: {json.dumps({'message': str(exc)})}\n\n"
+
+
+@app.post("/exam/run")
+def run_exam(questions: int = 5, session_id: str = Session):
+    """Streams the live exam: questions, Reeta's answers as they are typed, then grades. See FRONTEND_CHANGES.md."""
+    return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)))),
+                             media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/exam/take")
@@ -125,18 +163,6 @@ def office_hours(session_id: str = Session):
 @app.get("/report")
 def report(session_id: str = Session):
     return svc.report(session_id)
-
-
-@app.post("/loop/quiz")
-def loop_quiz(session_id: str = Session):
-    """Daily round: up to 3 questions, graded by grading.py, phrased by Reeta, recorded for the streak."""
-    return svc.loop_quiz(session_id)
-
-
-@app.get("/loop/today")
-def loop_today(session_id: str = Session):
-    """Streak, Reeta's mood and line, and the concept she wants to learn next."""
-    return svc.loop_today(session_id)
 
 
 @app.post("/session/reset")
