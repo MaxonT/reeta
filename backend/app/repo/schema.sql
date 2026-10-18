@@ -56,3 +56,45 @@ CREATE TABLE IF NOT EXISTS sources (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS sources_session ON sources(session_id, id);
+
+-- Accounts. A logged in user's lectures, sources and attempts use session_id 'user:<id>'.
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    email TEXT NOT NULL UNIQUE,                    -- lowercased
+    name TEXT NOT NULL,
+    role TEXT NOT NULL,                            -- teacher | student
+    password_hash TEXT NOT NULL,                   -- scrypt$<salt hex>$<hash hex>
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    token_hash TEXT PRIMARY KEY,                   -- sha256 of the bearer token, the token itself is never stored
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    expires_at INTEGER NOT NULL                    -- unix seconds
+);
+
+CREATE TABLE IF NOT EXISTS classes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    teacher_id INTEGER NOT NULL REFERENCES users(id),
+    name TEXT NOT NULL,
+    join_code TEXT NOT NULL UNIQUE,                -- students type this to join
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS topics (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    class_id INTEGER NOT NULL REFERENCES classes(id),
+    title TEXT NOT NULL,
+    instructions TEXT NOT NULL DEFAULT '',         -- what the teacher wants covered, shown to students
+    questions_per_quiz INTEGER NOT NULL DEFAULT 3,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+-- A topic's notes are rows in `sources` with session_id 'topic:<id>'. A student's work on it (lectures,
+-- attempts) uses session_id 'user:<student id>:topic:<id>', so each topic has its own Reeta. See sessions.py.
+
+CREATE TABLE IF NOT EXISTS class_members (
+    class_id INTEGER NOT NULL REFERENCES classes(id),
+    student_id INTEGER NOT NULL REFERENCES users(id),
+    joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (class_id, student_id)
+);

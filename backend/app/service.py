@@ -10,6 +10,7 @@ from .exam import AnswerStream, transcripts_text, verify_quotes
 from .grading import CORRECT, MISCONCEPTION, NOT_TAUGHT, concept_status, grade_exam
 from .llm.base import RESET, LLMClient, template_phrase
 from .repo.base import Repository
+from .sessions import notes_session_for
 from .sources import PASTED, clean_text, combine_sources, extract_text
 from .speech.base import SpeechClient
 from .words import sentences_to_words
@@ -90,7 +91,8 @@ class ReetaService:
             fixed = load_fixed_questions(self.question_file)  # re-read each call, so edits show up without a restart
             n = min(n, len(fixed))
             return self.rng.sample(fixed, n) if self.question_shuffle else fixed[:n]
-        notes = combine_sources(self.repo.list_sources(session_id), self.max_notes_chars)  # None: default notes
+        # a topic session quizzes on the teacher's notes for that topic
+        notes = combine_sources(self.repo.list_sources(notes_session_for(session_id)), self.max_notes_chars)  # None: default notes
         return self.llm.generate_questions(self.key, n, notes)
 
     def run_exam(self, session_id: str, n: int = 5, source: str | None = None) -> Iterator[dict]:

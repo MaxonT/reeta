@@ -49,6 +49,58 @@ class Repository(ABC):
     @abstractmethod
     def reset_session(self, session_id: str) -> None: ...
 
+    # Accounts. User dicts never carry password_hash except from get_user_by_email (login needs it).
+    @abstractmethod
+    def create_user(self, email: str, name: str, role: str, password_hash: str) -> int | None:
+        """None if that email is taken."""
+    @abstractmethod
+    def get_user(self, user_id: int) -> dict | None: ...
+    @abstractmethod
+    def get_user_by_email(self, email: str) -> dict | None:
+        """Includes password_hash."""
+    @abstractmethod
+    def create_token(self, token_hash: str, user_id: int, expires_at: int) -> None: ...
+    @abstractmethod
+    def user_for_token(self, token_hash: str, now: int) -> dict | None:
+        """The token's user, or None if it is unknown or expired."""
+    @abstractmethod
+    def delete_token(self, token_hash: str) -> None: ...
+
+    # Classes
+    @abstractmethod
+    def create_class(self, teacher_id: int, name: str, join_code: str) -> int | None:
+        """None if that join code is taken."""
+    @abstractmethod
+    def get_class(self, class_id: int) -> dict | None: ...
+    @abstractmethod
+    def class_by_code(self, join_code: str) -> dict | None: ...
+    @abstractmethod
+    def list_teacher_classes(self, teacher_id: int) -> list[dict]:
+        """Oldest first, each with student_count."""
+    @abstractmethod
+    def list_student_classes(self, student_id: int) -> list[dict]:
+        """Oldest joined first, each with teacher_name."""
+    @abstractmethod
+    def add_member(self, class_id: int, student_id: int) -> bool:
+        """False if already a member."""
+    @abstractmethod
+    def list_members(self, class_id: int) -> list[dict]:
+        """Users with joined_at, ordered by name."""
+    @abstractmethod
+    def is_member(self, class_id: int, student_id: int) -> bool: ...
+
+    # Topics a teacher sets for a class. Their notes are sources under sessions.topic_notes_session().
+    @abstractmethod
+    def create_topic(self, class_id: int, title: str, instructions: str, questions_per_quiz: int) -> int: ...
+    @abstractmethod
+    def get_topic(self, topic_id: int) -> dict | None: ...
+    @abstractmethod
+    def list_topics(self, class_id: int) -> list[dict]:
+        """Oldest first."""
+    @abstractmethod
+    def update_topic(self, topic_id: int, **fields) -> None:
+        """fields among title, instructions, questions_per_quiz"""
+
 
 def get_repository(provider: str) -> Repository:
     from ..config import settings

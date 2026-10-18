@@ -86,3 +86,42 @@ CREATE TABLE IF NOT EXISTS loop_rounds (
     concept_ids CLOB NOT NULL CHECK (concept_ids IS JSON)
 )
 /
+CREATE TABLE IF NOT EXISTS users (
+    id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email         VARCHAR2(320) NOT NULL UNIQUE,
+    name          VARCHAR2(200) NOT NULL,
+    role          VARCHAR2(20) NOT NULL,
+    password_hash VARCHAR2(300) NOT NULL,
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+/
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    token_hash  VARCHAR2(64) PRIMARY KEY,
+    user_id     NUMBER NOT NULL REFERENCES users(id),
+    expires_at  NUMBER NOT NULL
+)
+/
+CREATE TABLE IF NOT EXISTS classes (
+    id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    teacher_id  NUMBER NOT NULL REFERENCES users(id),
+    name        VARCHAR2(200) NOT NULL,
+    join_code   VARCHAR2(20) NOT NULL UNIQUE,
+    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+/
+CREATE TABLE IF NOT EXISTS class_members (
+    class_id    NUMBER NOT NULL REFERENCES classes(id),
+    student_id  NUMBER NOT NULL REFERENCES users(id),
+    joined_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+    PRIMARY KEY (class_id, student_id)
+)
+/
+CREATE TABLE IF NOT EXISTS topics (
+    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    class_id            NUMBER NOT NULL REFERENCES classes(id),
+    title               VARCHAR2(200) NOT NULL,
+    instructions        CLOB,
+    questions_per_quiz  NUMBER DEFAULT 3 NOT NULL,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL
+)
+/

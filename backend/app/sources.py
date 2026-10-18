@@ -1,8 +1,10 @@
 """Source material: turn an upload into clean text, and combine a session's sources for the question writer.
-To support another file type (e.g. PDF), add an extractor to _EXTRACTORS. Nothing else needs to change."""
+To support another file type, add an extractor to _EXTRACTORS. Nothing else needs to change."""
+import io
 from pathlib import Path
 
 PASTED = "pasted notes"
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # a file; PDFs and Word files carry fonts and images. The text limit still applies.
 
 
 class SourceError(ValueError):
@@ -22,7 +24,45 @@ def _decode_text(data: bytes) -> str:
     raise AssertionError("unreachable")
 
 
-_EXTRACTORS = {".txt": _decode_text, ".md": _decode_text}
+def _pdf_text(data: bytes) -> str:
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+    try:
+        reader = PdfReader(io.BytesIO(data))
+        if reader.is_encrypted and not reader.decrypt(""):
+            raise SourceError("That PDF is password protected. Remove the password and upload it again.")
+        pages = ((page.extract_text() or "").strip() for page in reader.pages)
+        text = "\n\n".join("\n".join(line.rstrip() for line in page.splitlines()) for page in pages)  # PDFs pad lines
+    except SourceError:
+        raise
+    except (PdfReadError, ValueError, KeyError, TypeError) as exc:
+        raise SourceError("That PDF could not be read. Is the file damaged?") from exc
+    if not text.strip():
+        raise SourceError("That PDF has no text to read. A scanned PDF is only pictures of pages; "
+                          "upload a PDF with selectable text, or paste the notes.")
+    return text
+
+
+def _docx_text(data: bytes) -> str:
+    from zipfile import BadZipFile
+    from docx import Document
+    try:
+        doc = Document(io.BytesIO(data))
+    except (BadZipFile, KeyError, ValueError) as exc:
+        raise SourceError("That Word file could not be read. Is the file damaged?") from exc
+    parts = [p.text for p in doc.paragraphs]
+    for table in doc.tables:  # notes often live in tables
+        for row in table.rows:
+            parts.append(" | ".join(cell.text.strip() for cell in row.cells))
+    return "\n".join(parts)
+
+
+def _old_doc(data: bytes) -> str:
+    raise SourceError("Old Word .doc files are not supported. In Word, use Save As > .docx or PDF, then upload that.")
+
+
+_EXTRACTORS = {".txt": _decode_text, ".md": _decode_text, ".pdf": _pdf_text, ".docx": _docx_text, ".doc": _old_doc}
+SUPPORTED = sorted(ext for ext, fn in _EXTRACTORS.items() if fn is not _old_doc)
 
 
 def extract_text(filename: str, data: bytes, max_chars: int) -> str:
@@ -30,7 +70,7 @@ def extract_text(filename: str, data: bytes, max_chars: int) -> str:
     ext = Path(filename or "").suffix.lower()
     extractor = _EXTRACTORS.get(ext)
     if extractor is None:
-        raise SourceError(f"Unsupported file type {ext or '(none)'}. Upload: {', '.join(sorted(_EXTRACTORS))}")
+        raise SourceError(f"Unsupported file type {ext or '(none)'}. Upload: {', '.join(SUPPORTED)}")
     return clean_text(extractor(data), max_chars)
 
 

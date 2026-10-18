@@ -13,7 +13,8 @@ const RING_C = 2 * Math.PI * RING_R
 
 // Teach: hold to talk (or Space), or type. Same recorder as TeachPanel. After the upload Reeta shows
 // what she wrote down (the transcript); everything you say goes straight into her notes.
-export default function Teach({ fix, sources, onClose, onTaught }) {
+// topic: the teacher's topic being taught (its title and instructions show at the top), or null.
+export default function Teach({ fix, sources, topic, onClose, onTaught }) {
   const rec = useRecorder()
   const [phase, setPhase] = useState('idle') // idle | processing | done
   const [elapsed, setElapsed] = useState(0)
@@ -116,7 +117,9 @@ export default function Teach({ fix, sources, onClose, onTaught }) {
           ? <div className="lp-context is-fix">
               <span className="lp-context-label">{fix.total > 1 ? `Fix ${fix.step + 1} of ${fix.total}` : 'Fix this one'}</span>{fix.prompt}
             </div>
-          : <div className="lp-context">Teach anything from <b>{notesName}</b>. She is quizzed on it next.</div>}
+          : topic
+            ? <div className="lp-context"><span className="lp-context-topic">{topic.title}</span>{topic.instructions || 'Teach Reeta this topic. She is quizzed on your teacher’s notes next.'}</div>
+            : <div className="lp-context">Teach anything from <b>{notesName}</b>. She is quizzed on it next.</div>}
 
         <Reeta mood={mood} size={phase === 'done' ? 132 : 176} say={say} idle={phase === 'idle'} pulse={rec.recording} />
 

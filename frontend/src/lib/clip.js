@@ -1,6 +1,6 @@
 // Play the Professor's own sentence. MediaRecorder webm files often cannot seek, so we decode the
 // whole Lecture with Web Audio and play just [start_ms, end_ms] from the buffer.
-import { api } from './api.js'
+import { api, authHeaders } from './api.js'
 
 let ctx = null
 const buffers = new Map()
@@ -13,7 +13,7 @@ export async function playClip(lectureId, startMs, endMs, onEnd) {
   if (ctx.state === 'suspended') await ctx.resume()
   let buf = buffers.get(lectureId)
   if (!buf) {
-    const res = await fetch(api.audioUrl(lectureId), { headers: { 'X-Session-Id': localStorage.getItem('reeta_session') || 'demo' } })
+    const res = await fetch(api.audioUrl(lectureId), { headers: authHeaders() })
     if (!res.ok) return false
     buf = await ctx.decodeAudioData(await res.arrayBuffer())
     buffers.set(lectureId, buf)
