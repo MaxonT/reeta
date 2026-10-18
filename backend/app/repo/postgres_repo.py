@@ -290,4 +290,4 @@ class PostgresRepository(Repository):
             raise ValueError(f"cannot update {bad}")
         if fields:
             cols = ", ".join(f"{k}=${i}" for i, k in enumerate(fields, 1))
-            self._x(f"UPDATE topics SET {cols} WHERE id=${len(fields) + 1}", (*fields.values(), topic_id))
+            self._x(f"UPDATE topics SET {_set_cols(fields, 2)} WHERE id=$1", topic_id, *fields.values())

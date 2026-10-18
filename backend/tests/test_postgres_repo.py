@@ -2,6 +2,11 @@ import inspect
 
 from app.repo.base import Repository
 from app.repo.postgres_repo import PostgresRepository, asyncpg_dsn, sqlalchemy_url
+import pytest
+
+from app.repo.pg_url import split_url, sqlalchemy_url
+
+NEON = "postgresql://u:p@ep-x-pooler.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
 
 
 def test_postgres_repository_implements_the_interface():
