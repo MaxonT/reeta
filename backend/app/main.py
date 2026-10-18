@@ -23,7 +23,8 @@ def build_service() -> ReetaService:
     repo.seed_content(load_exam(settings.content_dir, key))
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
                         key, settings.audio_dir, settings.pass_threshold,
-                        settings.max_source_chars, settings.max_notes_chars)
+                        settings.max_source_chars, settings.max_notes_chars, settings.question_source,
+                        settings.content_dir / settings.question_file, settings.question_shuffle)
 
 
 app = FastAPI(title="Reeta: teach the AI student")
@@ -31,6 +32,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 svc = build_service()
 
 Session = Header(default="demo", alias="X-Session-Id")
+
+
+def _no_longer_supported(what: str):
+    """The notebook flow's storage was dropped, so its endpoints answer 410 instead of crashing with a 500."""
+    raise HTTPException(410, f"{what} is no longer supported. Use the live exam (POST /exam/run).")
 
 
 class ConfirmBody(BaseModel):
@@ -74,13 +80,7 @@ async def post_lecture_audio(
 
 @app.post("/lectures/{lecture_id}/confirm")
 def confirm(lecture_id: int, body: ConfirmBody, session_id: str = Session):
-    lec = svc.repo.get_lecture(lecture_id)
-    if not lec or lec["session_id"] != session_id:
-        raise HTTPException(404, "Lecture not found")
-    try:
-        return svc.confirm(session_id, lecture_id, body.entry_ids, body.edits, body.additions)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+    _no_longer_supported("Confirming lecture entries")
 
 
 @app.get("/lectures")
@@ -99,7 +99,7 @@ def lecture_audio(lecture_id: int):
 
 @app.get("/notebook")
 def notebook(session_id: str = Session):
-    return svc.notebook(session_id)
+    _no_longer_supported("The notebook")
 
 
 @app.post("/sources")
@@ -143,26 +143,29 @@ def _sse(events):
 
 
 @app.post("/exam/run")
-def run_exam(questions: int = 5, session_id: str = Session):
-    """Streams the live exam: questions, Reeta's answers as they are typed, then grades. See FRONTEND_CHANGES.md."""
-    return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)))),
+def run_exam(questions: int = 5, source: str | None = None, session_id: str = Session):
+    """Streams the live exam: questions, Reeta's answers as they are typed, then grades. See FRONTEND_CHANGES.md.
+    `source` (llm | fixed) overrides QUESTION_SOURCE for this run."""
+    if source not in (None, "llm", "fixed"):
+        raise HTTPException(400, "source must be llm or fixed")
+    return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)), source)),
                              media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/exam/take")
 def take_exam(session_id: str = Session):
-    return svc.take_exam(session_id)
+    _no_longer_supported("The notebook exam")
 
 
 @app.get("/office-hours")
 def office_hours(session_id: str = Session):
-    return {"concepts": svc.office_hours(session_id)}
+    _no_longer_supported("The office hours list")
 
 
 @app.get("/report")
 def report(session_id: str = Session):
-    return svc.report(session_id)
+    _no_longer_supported("The report card")
 
 
 @app.post("/session/reset")

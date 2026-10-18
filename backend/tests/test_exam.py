@@ -2,7 +2,7 @@ import pytest
 
 from app.config import settings
 from app.content import load_answer_key
-from app.exam import AnswerStream, transcripts_text, verify_quote
+from app.exam import AnswerStream, transcripts_text, verify_quote, verify_quotes
 from app.llm.mock import MockLLMClient
 from app.repo.sqlite_repo import SQLiteRepository
 from app.service import ReetaService
@@ -159,3 +159,163 @@ def test_run_exam_reports_an_error_event_if_questions_cannot_be_written(key, tmp
     events = list(svc.run_exam("s1", 3))
     assert [e["event"] for e in events] == ["error"]
     assert repo.list_attempts("s1") == []
+
+
+class RecordsTranscripts(MockLLMClient):
+    def answer_stream(self, question, transcripts):
+        self.seen = transcripts
+        yield "A function can call itself.\nQUOTE: A function can call itself"  # only true of the first lecture
+
+
+def test_exam_uses_the_newest_lecture_plus_office_hours_after_it(key, tmp_path):
+    llm = RecordsTranscripts()
+    repo, svc = make_svc(key, tmp_path, llm)
+    repo.create_lecture("s1", "lecture", "A function can call itself. Old lecture.")
+    repo.create_lecture("s1", "office_hours", "Old follow up.")
+    repo.create_lecture("s1", "lecture", "Recursion stops by itself. New lecture.")
+    repo.create_lecture("s1", "office_hours", "New follow up.")
+    repo.create_lecture("other", "lecture", "Someone else's lecture.")
+    ev = by_event(svc.run_exam("s1", 1))
+    assert "New lecture" in llm.seen and "New follow up" in llm.seen
+    assert "Old lecture" not in llm.seen and "Old follow up" not in llm.seen and "Someone else" not in llm.seen
+    assert not ev["answer_done"][0]["supported"]  # her quote is from the old lecture, which she no longer has
+
+
+def test_exam_with_only_office_hours_uses_all_of_them(key, tmp_path):
+    llm = RecordsTranscripts()
+    repo, svc = make_svc(key, tmp_path, llm)
+    repo.create_lecture("s1", "office_hours", "First follow up.")
+    repo.create_lecture("s1", "office_hours", "Second follow up.")
+    list(svc.run_exam("s1", 1))
+    assert "First follow up" in llm.seen and "Second follow up" in llm.seen
+
+
+def test_exam_skips_a_blank_lecture(key, tmp_path):
+    llm = RecordsTranscripts()
+    repo, svc = make_svc(key, tmp_path, llm)
+    repo.create_lecture("s1", "lecture", "Good lecture.")
+    repo.create_lecture("s1", "lecture", "")  # e.g. a failed upload left an empty row
+    list(svc.run_exam("s1", 1))
+    assert "Good lecture" in llm.seen  # the blank newest lecture does not wipe out the real one
+
+
+class WritesNothing(MockLLMClient):
+    def generate_questions(self, key, n, notes=None):
+        raise AssertionError("the LLM question writer must not run in fixed mode")
+
+
+def fixed_svc(key, tmp_path, llm, count=7):
+    import json
+    path = tmp_path / "fixed.json"
+    path.write_text(json.dumps({"questions": [
+        {"prompt": f"Question {i}?", "reference_answer": f"Answer {i}."} for i in range(1, count + 1)]}))
+    repo, svc = make_svc(key, tmp_path, llm)
+    svc.question_file = path
+    return repo, svc
+
+
+def asked(events):
+    return [q["prompt"] for q in by_event(events)["questions"][0]["questions"]]
+
+
+def test_fixed_question_source_uses_the_file_and_never_the_llm(key, tmp_path):
+    repo, svc = fixed_svc(key, tmp_path, WritesNothing())
+    teach(repo)
+    ev = list(svc.run_exam("s1", 3, source="fixed"))
+    prompts = asked(ev)
+    assert len(prompts) == 3 and len(set(prompts)) == 3 and all(p.startswith("Question ") for p in prompts)
+    assert len(by_event(ev)["graded"]) == 3
+
+
+def test_fixed_questions_are_asked_in_file_order_by_default(key, tmp_path):
+    repo, svc = fixed_svc(key, tmp_path, MockLLMClient())
+    teach(repo)
+    assert not svc.question_shuffle
+    for _ in range(5):
+        assert asked(svc.run_exam("s1", 3, source="fixed")) == ["Question 1?", "Question 2?", "Question 3?"]
+
+
+def test_fixed_questions_are_shuffled_only_when_the_setting_is_on(key, tmp_path):
+    repo, svc = fixed_svc(key, tmp_path, MockLLMClient())
+    teach(repo)
+    svc.question_shuffle = True
+    runs = {tuple(asked(svc.run_exam("s1", 3, source="fixed"))) for _ in range(12)}
+    assert len(runs) > 1  # 12 runs of 3 out of 7 are not all the same pick and order
+    assert max(len(asked(svc.run_exam("s1", 10, source="fixed"))) for _ in range(2)) == 7  # capped at the file size
+
+
+def test_question_source_setting_is_the_default_and_the_argument_overrides_it(key, tmp_path):
+    repo, svc = fixed_svc(key, tmp_path, MockLLMClient())
+    svc.question_source = "fixed"
+    assert asked(svc.run_exam("s1", 1))[0].startswith("Question ")
+    assert not asked(svc.run_exam("s1", 1, source="llm"))[0].startswith("Question ")
+
+
+def test_fixed_source_without_a_file_reports_an_error_event(key, tmp_path):
+    _, svc = make_svc(key, tmp_path, MockLLMClient())
+    events = list(svc.run_exam("s1", 1, source="fixed"))
+    assert [e["event"] for e in events] == ["error"]
+
+
+def test_the_shipped_fixed_questions_are_the_three_easy_ones_and_the_extras_file_is_valid():
+    from app.content import load_fixed_questions
+    qs = load_fixed_questions(settings.content_dir / settings.question_file)
+    assert len(qs) == 3 and len({q["prompt"] for q in qs}) == 3
+    extra = load_fixed_questions(settings.content_dir / "photosynthesis_questions_extra.json")
+    assert not {q["prompt"] for q in qs} & {q["prompt"] for q in extra}  # no question is in both files
+
+
+def test_answer_stream_reads_several_quote_lines_and_caps_them_at_three():
+    s = AnswerStream()
+    s.feed("It has thylakoids and a stroma.\nQUOTE: thylakoids hold the chlorophyll\nquote: the fluid is the stroma\n")
+    s.feed("QUOTE: NONE\nQUOTE: third one\nQUOTE: fourth one")
+    answer, quotes = s.finish_all()
+    assert answer == "It has thylakoids and a stroma."
+    assert quotes == ["thylakoids hold the chlorophyll", "the fluid is the stroma", "third one"]
+    assert s.finish() == (answer, "thylakoids hold the chlorophyll")
+
+
+def test_verify_quotes_keeps_real_ones_and_drops_fabrications_and_repeats():
+    lecs = [{"id": 1, "text": "Thylakoids hold the chlorophyll. The fluid around them is the stroma.", "words": []}]
+    found = verify_quotes(["thylakoids hold the chlorophyll", "the fluid around them is the stroma",
+                           "Thylakoids hold the chlorophyll!", "mitochondria make all the sugar"], lecs)
+    assert [f["quote"] for f in found] == ["Thylakoids hold the chlorophyll.", "The fluid around them is the stroma."]
+
+
+class TwoPassages(MockLLMClient):
+    """An answer stitched from two sentences, citing each, like the chloroplast question."""
+
+    def answer_stream(self, question, transcripts):
+        yield "Thylakoids hold chlorophyll and the stroma runs the Calvin cycle.\n"
+        yield "QUOTE: thylakoids hold the chlorophyll\nQUOTE: the fluid around them is the stroma"
+
+    def judge(self, question, reference, answer, quote):
+        self.judged = quote
+        return {"is_correct": True, "supported": True, "feedback": "ok"}
+
+
+def test_an_answer_built_from_two_passages_is_supported_and_the_judge_sees_both(key, tmp_path):
+    llm = TwoPassages()
+    repo, svc = make_svc(key, tmp_path, llm)
+    lid = repo.create_lecture("s1", "lecture", "Thylakoids hold the chlorophyll. The fluid around them is the stroma.")
+    ev = by_event(svc.run_exam("s1", 1))
+    done = ev["answer_done"][0]
+    assert done["supported"] and done["lecture_id"] == lid
+    assert done["quote"] == "Thylakoids hold the chlorophyll."  # the single quote fields hold the first one
+    assert [q["quote"] for q in done["quotes"]] == ["Thylakoids hold the chlorophyll.",
+                                                    "The fluid around them is the stroma."]
+    assert llm.judged == "Thylakoids hold the chlorophyll. [...] The fluid around them is the stroma."
+    assert ev["graded"][0]["is_correct"]
+
+
+class FakeQuoteOnly(MockLLMClient):
+    def answer_stream(self, question, transcripts):
+        yield "Something.\nQUOTE: this sentence was never said anywhere"
+
+
+def test_a_rejected_quote_is_shown_in_the_feedback(key, tmp_path):
+    repo, svc = make_svc(key, tmp_path, FakeQuoteOnly())
+    teach(repo)
+    ev = by_event(svc.run_exam("s1", 1))
+    assert not ev["answer_done"][0]["supported"] and ev["answer_done"][0]["quotes"] == []
+    assert "this sentence was never said anywhere" in repo.list_attempts("s1")[0]["answers"][0]["feedback"]

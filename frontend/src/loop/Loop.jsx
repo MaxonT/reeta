@@ -10,7 +10,7 @@ import Quiz from './Quiz.jsx'
 import Result from './Result.jsx'
 import './loop.css'
 
-// The daily loop: Home -> Teach -> Quiz (live exam) -> Result -> (Fix it -> Teach) or Home.
+// The daily loop: Home -> Teach -> Quiz (live exam) -> Result -> (Fix it -> Teach once per wrong question -> Quiz) or Home.
 // Home -> Notes to upload the course material the questions are written from.
 // All shared state lives here; screens call back instead of navigating on their own.
 export default function Loop() {
@@ -18,7 +18,9 @@ export default function Loop() {
   const [today, setToday] = useState(readToday)
   const [sources, setSources] = useState(null)   // null while loading
   const [error, setError] = useState(null)
-  const [fix, setFix] = useState(null)           // {id, prompt, reason} of the question being re taught
+  const [fixQueue, setFixQueue] = useState(null) // [{id, prompt, reason}] every question she got wrong, re taught in turn
+  const [fixStep, setFixStep] = useState(0)      // index of the question being re taught
+  const fix = fixQueue ? { ...fixQueue[fixStep], step: fixStep, total: fixQueue.length } : null
   const [quiz, setQuiz] = useState(null)         // {questions, score, total, passed, streak}
   const [streakBefore, setStreakBefore] = useState(0)
 
@@ -32,7 +34,7 @@ export default function Loop() {
   function maybeDemo() {
     if (window.location.hash !== '#demo') return false
     history.replaceState(null, '', window.location.pathname)
-    setSources(null); setFix(null); setQuiz(null); setScreen('home')
+    setSources(null); setFixQueue(null); setQuiz(null); setScreen('home')
     seedDemo().catch((e) => console.warn('[loop] demo reset failed:', e.message)).finally(refresh)
     return true
   }
@@ -42,8 +44,14 @@ export default function Loop() {
     return () => window.removeEventListener('hashchange', maybeDemo)
   }, [])
 
-  function startTeach(target = null) { setFix(target); setQuiz(null); setScreen('teach') }
-  function home() { setFix(null); setScreen('home'); refresh() }
+  // items: null for a fresh lesson, or every wrong question to re teach one after another
+  function startTeach(items = null) { setFixQueue(items?.length ? items : null); setFixStep(0); setQuiz(null); setScreen('teach') }
+  function home() { setFixQueue(null); setScreen('home'); refresh() }
+  // After a recording: the next wrong question, or the quiz once all of them are re taught.
+  function taught() {
+    if (fixQueue && fixStep + 1 < fixQueue.length) { setFixStep(fixStep + 1); return }
+    setStreakBefore(readToday().streak); setScreen('quiz')
+  }
 
   return (
     <MotionConfig reducedMotion="user">
@@ -61,15 +69,14 @@ export default function Loop() {
                 <Notes sources={sources} onChange={loadSources} onClose={home} />
               )}
               {screen === 'teach' && (
-                <Teach fix={fix} sources={sources} onClose={home}
-                  onTaught={() => { setStreakBefore(readToday().streak); setScreen('quiz') }} />
+                <Teach fix={fix} sources={sources} onClose={home} onTaught={taught} />
               )}
               {screen === 'quiz' && (
                 <Quiz onClose={home} onDone={(q) => { setQuiz(q); setScreen('result') }} />
               )}
               {screen === 'result' && quiz && (
                 <Result quiz={quiz} streakBefore={streakBefore} onClose={home}
-                  onFix={(target) => startTeach(target)} onDone={home} />
+                  onFix={(items) => startTeach(items)} onDone={home} />
               )}
             </motion.div>
           </AnimatePresence>

@@ -3,6 +3,7 @@ import math
 import re
 
 MARKER = "QUOTE:"
+MAX_QUOTES = 3  # an answer built from several sentences may cite one passage per sentence
 _MARKER_RE = re.compile(r"quote\s*:", re.IGNORECASE)
 
 
@@ -32,14 +33,23 @@ class AnswerStream:
         self.sent = max(self.sent, end)
         return out
 
-    def finish(self) -> tuple[str, str | None]:
-        """-> (answer_text, quote or None)"""
+    def finish_all(self) -> tuple[str, list[str]]:
+        """-> (answer_text, up to MAX_QUOTES quotes). One QUOTE: line per passage; NONE and blanks are dropped."""
         m = _MARKER_RE.search(self.buf)
         answer = (self.buf[:m.start()] if m else self.buf).strip()
-        quote = self.buf[m.end():].strip().strip("\"'“”‘’").strip() if m else ""
-        if not quote or quote.upper().startswith("NONE"):
-            return answer, None
-        return answer, quote
+        if not m:
+            return answer, []
+        quotes = []
+        for part in _MARKER_RE.split(self.buf[m.end():]):
+            part = part.strip().strip("\"'“”‘’").strip()
+            if part and not part.upper().startswith("NONE"):
+                quotes.append(part)
+        return answer, quotes[:MAX_QUOTES]
+
+    def finish(self) -> tuple[str, str | None]:
+        """-> (answer_text, first quote or None)"""
+        answer, quotes = self.finish_all()
+        return answer, quotes[0] if quotes else None
 
 
 def _norm(token: str) -> str:
@@ -93,6 +103,16 @@ def verify_quote(quote: str | None, lectures: list[dict]) -> dict | None:
     _, lec, span = best
     return {"lecture_id": lec["id"], "quote": " ".join(t[1] for t in span),
             "start_ms": span[0][2], "end_ms": span[-1][3]}
+
+
+def verify_quotes(quotes: list[str], lectures: list[dict]) -> list[dict]:
+    """verify_quote for each quote, keeping only the real ones and dropping repeats of the same passage."""
+    out = []
+    for quote in quotes:
+        found = verify_quote(quote, lectures)
+        if found and not any(f["lecture_id"] == found["lecture_id"] and f["quote"] == found["quote"] for f in out):
+            out.append(found)
+    return out
 
 
 def transcripts_text(lectures: list[dict]) -> str:

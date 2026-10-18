@@ -4,6 +4,7 @@ import { api } from '../lib/api.js'
 import { playClip, stopClip } from '../lib/clip.js'
 import { recordQuiz } from '../lib/loopState.js'
 import { lines } from '../lib/reetaLines.js'
+import { playGrade } from '../lib/sfx.js'
 import Reeta from './Reeta.jsx'
 import { TopBar } from './ui.jsx'
 
@@ -40,13 +41,17 @@ export default function Quiz({ onClose, onDone }) {
     } else if (name === 'answer_reset') {
       update(d.id, () => ({ text: '' }))
     } else if (name === 'answer_done') {
-      update(d.id, () => ({ status: 'answered', text: d.line, supported: d.supported, quote: d.quote, lecture_id: d.lecture_id,
-        quote_start_ms: d.quote_start_ms, quote_end_ms: d.quote_end_ms }))
-      if (d.lecture_id) loadLecture(d.lecture_id)
+      // One quote per passage her answer drew on. Older servers send only the single quote fields.
+      const quotes = d.quotes || (d.quote ? [{ lecture_id: d.lecture_id, quote: d.quote,
+        quote_start_ms: d.quote_start_ms, quote_end_ms: d.quote_end_ms }] : [])
+      update(d.id, () => ({ status: 'answered', text: d.line, supported: d.supported, quotes }))
+      if (quotes.length) loadLecture(quotes[0].lecture_id)  // fetches every lecture of the session at once
     } else if (name === 'graded') {
-      // The judge has the final word: not_taught means the quote did not back the answer.
+      // The judge has the final word: not_taught means the quotes did not back the answer. The passage and
+      // its replay stay on screen either way (relabeled below), so the Professor can still hear what they said.
       update(d.id, (q) => ({ status: 'graded', is_correct: d.is_correct, reason: d.reason, feedback: d.feedback,
-        quote: d.reason === 'not_taught' ? null : q.quote }))
+        line: d.is_correct ? lines.graded.correct : d.reason === 'not_taught' ? lines.graded.not_taught : lines.graded.wrong }))
+      playGrade(d)
     } else if (name === 'done') {
       setCurrent(null); setResult(d)
     } else if (name === 'error') {
@@ -100,12 +105,12 @@ export default function Quiz({ onClose, onDone }) {
   const active = qs?.find((q) => q.id === current)
   const lastGraded = graded[graded.length - 1]
   const mood = error ? 'confused' : finished ? (result.passed ? 'proud' : 'confused')
-    : active ? 'thinking' : lastGraded ? ({ correct: 'proud', wrong: 'confused', not_taught: 'thinking' }[lastGraded.reason]) : 'thinking'
+    : active ? 'thinking' : lastGraded ? ({ correct: 'cheer', wrong: 'confused', not_taught: 'hmm' }[lastGraded.reason]) : 'thinking'
   const say = error ? 'Something went wrong…'
-    : finished ? (result.passed ? 'Done! I think… I think I did it?' : 'Done! Some of these felt weird…')
+    : finished ? lines.finished(result)
     : !qs ? lines.quizStart
     : active?.status === 'answering' ? lines.answering
-    : lastGraded ? lines.graded[lastGraded.reason] : lines.quizStart
+    : lastGraded ? lastGraded.line : lines.quizStart
 
   function finish() {
     stopClip()
@@ -124,14 +129,14 @@ export default function Quiz({ onClose, onDone }) {
 
         {!qs && !error && <div className="lp-skeleton" aria-hidden="true" />}
         {qs?.map((q, i) => (
-          <QuestionCard key={q.id} q={q} n={i + 1} total={qs.length} lecture={lectures[q.lecture_id]} current={q.id === current} />
+          <QuestionCard key={q.id} q={q} n={i + 1} total={qs.length} lectures={lectures} current={q.id === current} />
         ))}
         <div ref={endRef} className="lp-end" />
       </div>
 
       <div className="lp-actions">
         {error && <><p className="lp-error" role="alert">{error}</p><button className="lp-btn lp-btn-primary lp-btn-xl" onClick={run}>Try again</button></>}
-        {!error && finished && <button className="lp-btn lp-btn-primary lp-btn-xl" onClick={finish}>See how I did</button>}
+        {!error && finished && <button className="lp-btn lp-btn-primary lp-btn-xl" onClick={finish}>Go to gradebook</button>}
         {!error && !finished && qs && (
           <p className="lp-hint" aria-live="polite">
             {active ? `Answering question ${qs.indexOf(active) + 1} of ${qs.length}…` : 'Checking her answers…'}
@@ -142,19 +147,40 @@ export default function Quiz({ onClose, onDone }) {
   )
 }
 
-function QuestionCard({ q, n, total, lecture, current }) {
+// One passage of the Professor's lecture that Reeta relied on, with its own replay button.
+function Passage({ p, label, good, lecture }) {
   const [playing, setPlaying] = useState(false)
   const [noAudio, setNoAudio] = useState(false)
-  const done = q.status === 'graded'
-  const hasClip = q.lecture_id && q.quote_end_ms > q.quote_start_ms && !noAudio
-  const showQuote = q.quote && (q.status === 'answered' || done)
+  const hasClip = p.lecture_id && p.quote_end_ms > p.quote_start_ms && !noAudio
 
   async function play() {
     if (playing) { stopClip(); setPlaying(false); return }
     setPlaying(true)
-    const ok = await playClip(q.lecture_id, q.quote_start_ms, q.quote_end_ms, () => setPlaying(false)).catch(() => false)
+    const ok = await playClip(p.lecture_id, p.quote_start_ms, p.quote_end_ms, () => setPlaying(false)).catch(() => false)
     if (!ok) { setPlaying(false); setNoAudio(true) }
   }
+
+  return (
+    <motion.div className={`lp-pen ${good ? 'is-good' : ''}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}>
+      <div className="lp-pen-text">
+        <span className="lp-pen-label">{label}</span>
+        <Excerpt lecture={lecture} quote={p.quote} start={p.quote_start_ms} end={p.quote_end_ms} />
+      </div>
+      {hasClip && (
+        <button className={`lp-play ${playing ? 'is-playing' : ''}`} onClick={play}
+          aria-label={playing ? 'Stop the clip' : 'Replay your sentence'} title="Replay your sentence">
+          {playing
+            ? <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
+            : <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5L8 5.5Z" fill="currentColor" /></svg>}
+        </button>
+      )}
+    </motion.div>
+  )
+}
+
+function QuestionCard({ q, n, total, lectures, current }) {
+  const done = q.status === 'graded'
+  const quotes = q.status === 'answered' || done ? q.quotes || [] : []
 
   const state = !done ? q.status : q.is_correct ? 'right' : q.reason === 'not_taught' ? 'missing' : 'wrong'
   return (
@@ -181,22 +207,11 @@ function QuestionCard({ q, n, total, lecture, current }) {
         </div>
       )}
 
-      {showQuote && (
-        <motion.div className={`lp-pen ${done && q.is_correct ? 'is-good' : ''}`} initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }}>
-          <div className="lp-pen-text">
-            <span className="lp-pen-label">{done && !q.is_correct ? 'Because you said' : 'You taught me'}</span>
-            <Excerpt lecture={lecture} quote={q.quote} start={q.quote_start_ms} end={q.quote_end_ms} />
-          </div>
-          {hasClip && (
-            <button className={`lp-play ${playing ? 'is-playing' : ''}`} onClick={play}
-              aria-label={playing ? 'Stop the clip' : 'Replay your sentence'} title="Replay your sentence">
-              {playing
-                ? <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" /></svg>
-                : <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5L8 5.5Z" fill="currentColor" /></svg>}
-            </button>
-          )}
-        </motion.div>
-      )}
+      {quotes.map((p, i) => (
+        <Passage key={`${p.lecture_id}-${p.quote_start_ms}-${i}`} p={p} lecture={lectures[p.lecture_id]}
+          good={done && q.is_correct}
+          label={i > 0 ? 'And you said' : done && q.reason === 'not_taught' ? 'Closest thing you said' : done && !q.is_correct ? 'Because you said' : 'You taught me'} />
+      ))}
 
       {done && q.reason === 'not_taught' && (
         <div className="lp-pen is-missing"><div className="lp-pen-text"><span className="lp-pen-label">{lines.notTaught}</span></div></div>

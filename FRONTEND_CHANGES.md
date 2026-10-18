@@ -26,7 +26,7 @@ Read it with `fetch` + a stream reader (`EventSource` cannot POST). Each message
 | `question_start` | `{id}` | Reeta starts on this question |
 | `answer_delta` | `{id, text}` | next piece of her answer; append it (typing effect). The `QUOTE:` tail is never sent. |
 | `answer_reset` | `{id}` | the backup model restarted the answer; clear the text so far |
-| `answer_done` | `{id, line, supported, lecture_id, quote, quote_start_ms, quote_end_ms}` | her full answer. `quote` is checked to be real text from a lecture. `supported: false` means no valid quote. ms values are null for typed lectures. |
+| `answer_done` | `{id, line, supported, lecture_id, quote, quote_start_ms, quote_end_ms}` | her full answer. `quote` is checked to be real text from a lecture. `supported: false` means no valid quote. `quote`, `lecture_id` and the ms values hold the first verified quote; `quotes` is the full list `[{lecture_id, quote, quote_start_ms, quote_end_ms}]` (up to 3, one per passage an answer drew on). ms values are null for typed lectures. |
 | `graded` | `{id, is_correct, reason, feedback}` | `reason` is `correct`, `wrong`, or `not_taught`. Arrives in question order, usually shortly after `answer_done`. |
 | `done` | `{attempt_id, attempt_no, score, total, passed}` | finished |
 | `error` | `{message}` | the exam could not run, or failed part way |

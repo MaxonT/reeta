@@ -31,6 +31,10 @@ export default function TeachPanel({ kind = 'lecture', answerKey, onConfirmed, o
   async function end() {
     const out = await rec.stop()
     if (!out) return
+    if (!out.blob.size && !out.sentences.length) { // a tap too short to record anything; the server would 400
+      setError('No speech detected. Try again, a little closer to the mic.')
+      return
+    }
     await upload({ blob: out.blob, sentences: out.sentences })
   }
 

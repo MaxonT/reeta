@@ -258,6 +258,21 @@
 .lp-confetti { position: absolute; left: 50%; top: 32%; width: 0; height: 0; pointer-events: none; z-index: 3; }
 .lp-confetti span { position: absolute; display: block; }
 
+/* Floating emoji cues around Reeta's head (sparkles, hearts, sweat drop, question mark) */
+.lp-cues { position: absolute; left: 50%; top: 40%; width: 0; height: 0; pointer-events: none; z-index: 2; }
+.lp-cue { position: absolute; line-height: 1; transform-origin: center; }
+
+/* Mute toggle in the top bar */
+.lp-mute { width: 36px; height: 36px; }
+.lp-mute.is-muted { color: var(--lp-muted); opacity: 0.7; }
+
+/* Celebration banner shown when a lesson is saved */
+.lp-cheer {
+  display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px;
+  background: var(--lp-accent-soft); color: var(--lp-ink); font-weight: 600; font-size: 16px;
+}
+.lp-cheer b { color: var(--lp-accent); }
+
 @media (max-height: 700px) {
   .lp-home { gap: 18px; }
 }

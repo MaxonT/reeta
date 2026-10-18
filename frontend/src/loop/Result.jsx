@@ -1,20 +1,23 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 import Reeta from './Reeta.jsx'
 import { Flame, TopBar } from './ui.jsx'
 import { lines } from '../lib/reetaLines.js'
+import { play } from '../lib/sfx.js'
 
 const COLORS = ['#12805C', '#E8B85A', '#FF8A3D', '#5B8DEF', '#E5484D']
 
 // Result: a big reaction. Pass: proud, confetti, streak +1. Fail: confused, and a Fix it button that
-// re teaches the first question she got wrong.
+// re teaches every question she got wrong, one after another, before she is quizzed again.
 export default function Result({ quiz, streakBefore = 0, onClose, onFix, onDone }) {
   const reduce = useReducedMotion()
   const passed = quiz.passed
   const streak = quiz.streak ?? streakBefore
   const bumped = passed && streak > streakBefore
   const wrong = quiz.questions.filter((q) => !q.is_correct)
-  const target = wrong[0]
+  const perfect = passed && quiz.score === quiz.total
+  const say = useMemo(() => (passed ? lines.pass(quiz) : lines.fail(quiz)), [])
+  useEffect(() => { play(passed ? 'pass' : 'fail') }, [])
 
   return (
     <>
@@ -25,7 +28,7 @@ export default function Result({ quiz, streakBefore = 0, onClose, onFix, onDone 
           initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 260, damping: 15 }}>
           {quiz.score}<span>/{quiz.total}</span>
         </motion.div>
-        <Reeta mood={passed ? 'proud' : 'confused'} size={200} say={passed ? lines.pass : lines.fail} idle={false} />
+        <Reeta mood={perfect ? 'cheer' : passed ? 'proud' : 'confused'} size={200} say={say} idle={false} />
 
         {passed ? (
           <motion.div className="lp-card lp-streak-card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
@@ -43,7 +46,7 @@ export default function Result({ quiz, streakBefore = 0, onClose, onFix, onDone 
           </motion.div>
         ) : (
           <motion.div className="lp-card lp-missed" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-            <div className="lp-section-label">What she got wrong</div>
+            <div className="lp-section-label">Let’s fix these together</div>
             <ul>
               {wrong.map((q) => (
                 <li key={q.id}>
@@ -57,9 +60,10 @@ export default function Result({ quiz, streakBefore = 0, onClose, onFix, onDone 
       </div>
 
       <div className="lp-actions">
-        {!passed && target && (
-          <button className="lp-btn lp-btn-primary lp-btn-xl" onClick={() => onFix({ id: target.id, prompt: target.prompt, reason: target.reason })}>
-            Fix it
+        {!passed && wrong.length > 0 && (
+          <button className="lp-btn lp-btn-primary lp-btn-xl"
+            onClick={() => onFix(wrong.map((q) => ({ id: q.id, prompt: q.prompt, reason: q.reason })))}>
+            {wrong.length > 1 ? `Fix all ${wrong.length}` : 'Fix it'}
           </button>
         )}
         <button className={`lp-btn lp-btn-xl ${passed ? 'lp-btn-primary' : 'lp-btn-secondary'}`} onClick={onDone}>Done for today</button>

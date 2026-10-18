@@ -22,6 +22,9 @@ class Settings:
     speech_provider: str = os.getenv("SPEECH_PROVIDER", "openai").lower()
     llm_provider: str = os.getenv("LLM_PROVIDER", "mock").lower()
     db_provider: str = os.getenv("DB_PROVIDER", "sqlite").lower()
+    question_source: str = os.getenv("QUESTION_SOURCE", "llm").lower()  # llm | fixed
+    question_file: str = os.getenv("QUESTION_FILE", "photosynthesis_questions.json")  # in CONTENT_DIR, for fixed
+    question_shuffle: bool = os.getenv("QUESTION_SHUFFLE", "false").lower() in ("1", "true", "yes")  # fixed: random pick
     sqlite_path: Path = _path(os.getenv("SQLITE_PATH", "backend/data/reeta.db"))
     audio_dir: Path = _path(os.getenv("AUDIO_DIR", "backend/data/audio"))
     content_dir: Path = _path(os.getenv("CONTENT_DIR", "content"))
