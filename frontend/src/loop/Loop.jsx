@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AnimatePresence, MotionConfig, motion } from 'framer-motion'
 import { api } from '../lib/api.js'
+import { seedDemo } from '../lib/demoSeed.js'
 import Home from './Home.jsx'
 import Teach from './Teach.jsx'
 import Quiz from './Quiz.jsx'
@@ -23,7 +24,20 @@ export default function Loop({ onClassroom }) {
     try { setToday(await api.loopToday()); setError(null) }
     catch { setError('Reeta can’t reach her classroom. Start the backend: uvicorn app.main:app --port 8000') }
   }
-  useEffect(() => { loadToday(); api.answerKey().then(setAnswerKey).catch(() => {}) }, [])
+  // #demo resets the session and seeds the background lesson (see lib/demoSeed.js), then shows Home.
+  function maybeDemo() {
+    if (window.location.hash !== '#demo') return false
+    history.replaceState(null, '', window.location.pathname)
+    setToday(null); setFix(null); setQuiz(null); setScreen('home')
+    seedDemo().catch((e) => console.warn('[loop] demo seed failed:', e.message)).finally(loadToday)
+    return true
+  }
+  useEffect(() => {
+    api.answerKey().then(setAnswerKey).catch(() => {})
+    if (!maybeDemo()) loadToday()
+    window.addEventListener('hashchange', maybeDemo)
+    return () => window.removeEventListener('hashchange', maybeDemo)
+  }, [])
 
   const label = (id) => answerKey?.concepts.find((c) => c.id === id)?.label || id
 

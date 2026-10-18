@@ -40,7 +40,7 @@
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: clip; /* clip, not hidden: hidden makes a scroll box and breaks the sticky .lp-actions */
 }
 @media (min-width: 640px) {
   .lp-app { background: var(--lp-page); padding: 28px 16px; }
@@ -49,7 +49,7 @@
     min-height: min(880px, calc(100dvh - 56px));
     border-radius: 36px;
     box-shadow: 0 0 0 1px rgba(23, 35, 31, 0.06), 0 30px 80px rgba(23, 35, 31, 0.14);
-    overflow: hidden;
+    overflow: clip;
   }
 }
 
@@ -162,7 +162,7 @@
 
 .lp-talk { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .lp-ring { position: relative; width: 148px; height: 148px; display: grid; place-items: center; }
-.lp-ring svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.lp-ring > svg { position: absolute; inset: 0; transform: rotate(-90deg); }
 .lp-ring-track { fill: none; stroke: var(--lp-line); stroke-width: 6; }
 .lp-ring-fill { fill: none; stroke: var(--lp-accent); stroke-width: 6; stroke-linecap: round; transition: stroke-dashoffset 0.1s linear; opacity: 0; }
 .lp-ring.is-on .lp-ring-fill { opacity: 1; }
@@ -265,3 +265,6 @@
 @media (prefers-reduced-motion: reduce) {
   .lp-app *, .lp-app *::before, .lp-app *::after { animation: none !important; transition: none !important; }
 }
+
+/* Auto scroll target under the quiz cards: stop above the sticky action bar. */
+.lp-end { scroll-margin-bottom: 120px; }

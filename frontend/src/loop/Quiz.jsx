@@ -59,7 +59,7 @@ export default function Quiz({ lesson, label, onClose, onDone }) {
           <QuestionCard key={r.question_id} r={r} n={i + 1} total={total} label={label} />
         ))}
         {quiz && !total && <p className="lp-hint">No questions today. Teach Reeta a bit more first.</p>}
-        <div ref={endRef} />
+        <div ref={endRef} className="lp-end" />
       </div>
 
       <div className="lp-actions">
