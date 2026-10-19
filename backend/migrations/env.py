@@ -14,7 +14,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-URL, CONNECT_ARGS = sqlalchemy_url(settings.database_url)
+URL, CONNECT_ARGS = sqlalchemy_url(settings.postgres_url)
 
 
 def run_migrations_offline() -> None:
