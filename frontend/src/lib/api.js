@@ -97,8 +97,11 @@ export const api = {
   // The live exam: POST /exam/run streams Server-Sent Events (see FRONTEND_CHANGES.md).
   // onEvent(name, data) is called for each event in order. Resolves when the stream ends.
   // EventSource cannot POST, so this reads the body stream by hand. Abort with signal.
-  runExam: async (onEvent, { questions = 3, signal } = {}) => {
-    const res = await fetch(`${API_BASE}/exam/run?questions=${questions}`, { method: 'POST', headers: authHeaders(), signal })
+  // `questions` is optional: a topic quiz's length is set by the teacher and the backend reads it from the
+  // database, so it is only sent when the caller knows it.
+  runExam: async (onEvent, { questions, signal } = {}) => {
+    const query = questions ? `?questions=${questions}` : ''
+    const res = await fetch(`${API_BASE}/exam/run${query}`, { method: 'POST', headers: authHeaders(), signal })
     checkAuth(res)
     if (!res.ok || !res.body) throw new Error(`POST /exam/run: ${res.status} ${await res.text()}`)
     const reader = res.body.getReader()

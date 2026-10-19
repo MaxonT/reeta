@@ -10,7 +10,7 @@ const STATUS = { not_started: 'not started', practicing: 'practicing', passed: '
 // Home: Reeta asks to be taught. One big button, plus what her quiz is written from: the topic a teacher set
 // (logged in students) or the course notes (free practice).
 export default function Home({ today, sources, onTeach, onNotes, account, classes, onClasses, onSignIn, topic, topics, onTopics }) {
-  const loading = sources === null
+  const loading = sources === null || (account && topics === null) // topics decide which layout to show
   const hello = useMemo(() => lines.home(today), [today.mood, today.streak])
   const notes = !sources?.length ? 'Python recursion (default)'
     : sources.length === 1 ? sources[0].filename : `${sources.length} files`
@@ -29,11 +29,13 @@ export default function Home({ today, sources, onTeach, onNotes, account, classe
 
       <div className="lp-body lp-home">
         <Reeta mood={loading ? 'thinking' : today.mood} size={232}
-          say={loading ? 'Finding my notebook…' : topic ? `Teach me ${topic.title}!` : hello} idle />
+          say={loading ? <span className="lp-dots" aria-label="Finding my notebook">Finding my notebook<i /><i /><i /></span> : topic ? `Teach me ${topic.title}!` : hello} idle />
         {topic && !topic.notes_count && (
           <p className="lp-hint">Your teacher hasn’t added notes for this topic yet, so Reeta can’t take a quiz on it.</p>
         )}
-        {topic ? (
+        {loading ? (
+          <span className="lp-skel lp-skel-line" aria-hidden="true" />
+        ) : topic ? (
           <p className="lp-last">
             {p.quizzes ? <>Best <b>{p.best_percent}%</b> · {STATUS[p.status]}</> : <>{topic.class_name} · {STATUS[p.status]}</>}
           </p>
@@ -43,14 +45,15 @@ export default function Home({ today, sources, onTeach, onNotes, account, classe
       </div>
 
       <div className="lp-actions">
-        {account && !inClass && (
+        {loading && <span className="lp-skel lp-skel-chip" aria-hidden="true" />}
+        {account && !inClass && !loading && (
           <button className="lp-notes-chip" onClick={onClasses}>
             <ClassIcon />
             <span className="lp-notes-chip-text">{classes === null ? 'Loading classes…' : <b>Join your class</b>}</span>
             <span className="lp-notes-chip-go" aria-hidden="true">Join</span>
           </button>
         )}
-        {inClass && (
+        {inClass && !loading && (
           <button className="lp-notes-chip" onClick={onTopics}>
             <ClassIcon />
             <span className="lp-notes-chip-text">
@@ -61,7 +64,7 @@ export default function Home({ today, sources, onTeach, onNotes, account, classe
             <span className="lp-notes-chip-go" aria-hidden="true">Change</span>
           </button>
         )}
-        {!topic && (
+        {!topic && !loading && (
           <button className="lp-notes-chip" onClick={onNotes} disabled={loading}>
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6V3Zm8 0v4h4M9 12h6M9 16h6" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinejoin="round" /></svg>
             <span className="lp-notes-chip-text">Course notes: <b>{notes}</b></span>

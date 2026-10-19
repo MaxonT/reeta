@@ -48,7 +48,7 @@ export default function Loop({ account = null, onLogout, onSignIn }) {
       const list = (await api.myTopics()).topics
       if (activeTopic() && !list.some((t) => t.id === activeTopic())) { setActiveTopic(null); loadSources() } // left the class
       setTopics(list)
-    } catch { /* Home shows free practice */ }
+    } catch { setTopics([]) /* Home shows free practice */ }
   }
   function refresh() { setToday(readToday()); loadSources(); loadClasses(); loadTopics() }
   function pickTopic(t) { setActiveTopic(t?.id); setSources(null); home() }
@@ -103,7 +103,7 @@ export default function Loop({ account = null, onLogout, onSignIn }) {
                 <Teach fix={fix} sources={sources} topic={topic} onClose={home} onTaught={taught} />
               )}
               {screen === 'quiz' && (
-                <Quiz onClose={home} onDone={(q) => { setQuiz(q); setScreen('result') }} />
+                <Quiz questions={topic?.questions_per_quiz} onClose={home} onDone={(q) => { setQuiz(q); setScreen('result') }} />
               )}
               {screen === 'result' && quiz && (
                 <Result quiz={quiz} streakBefore={streakBefore} onClose={home}
