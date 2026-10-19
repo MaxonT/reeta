@@ -340,3 +340,21 @@
 }
 .lp-mark.is-missing { background: #b9b4a8; }
 .lp-pen.is-good .lp-play { background: var(--lp-accent); box-shadow: 0 3px 0 var(--lp-accent-press); }
+
+/* Home loading state: shimmering placeholders where the topic line and chip will land. */
+.lp-skel {
+  display: block; border-radius: 999px;
+  background: linear-gradient(90deg, var(--lp-line) 25%, #f1efe8 50%, var(--lp-line) 75%);
+  background-size: 200% 100%; animation: lp-shimmer 1.3s ease-in-out infinite;
+}
+.lp-skel-line { width: 120px; height: 14px; }
+.lp-skel-chip { width: 100%; height: 52px; border-radius: 16px; }
+@keyframes lp-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.lp-dots i {
+  display: inline-block; width: 4px; height: 4px; margin-left: 3px; border-radius: 50%;
+  background: currentColor; animation: lp-dot 1.2s ease-in-out infinite;
+}
+.lp-dots i:nth-child(2) { animation-delay: 0.15s; }
+.lp-dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes lp-dot { 0%, 60%, 100% { opacity: 0.25; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .lp-skel, .lp-dots i { animation: none; } }

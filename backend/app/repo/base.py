@@ -112,5 +112,5 @@ def get_repository(provider: str) -> Repository:
         return OracleRepository()
     if provider == "postgres":
         from .postgres_repo import PostgresRepository
-        return PostgresRepository()
+        return PostgresRepository(settings.postgres_url)
     raise ValueError(f"unknown DB_PROVIDER {provider!r}")

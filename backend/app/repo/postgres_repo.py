@@ -191,7 +191,7 @@ class PostgresRepository(Repository):
                     "is_correct, reason, feedback, lecture_id, quote, quote_start_ms, quote_end_ms, line) "
                     "VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)",
                     attempt_id, a["question_id"], a.get("prompt", ""), a.get("reference_answer", ""),
-                    a["answer"], int(a["is_correct"]), a["reason"], a.get("feedback"), a.get("lecture_id"),
+                    a["answer"], bool(a["is_correct"]), a["reason"], a.get("feedback"), a.get("lecture_id"),
                     a.get("quote"), a.get("quote_start_ms"), a.get("quote_end_ms"), a.get("line"))
         self._tx(work)
 

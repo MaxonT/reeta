@@ -8,7 +8,6 @@ import { playGrade } from '../lib/sfx.js'
 import Reeta from './Reeta.jsx'
 import { TopBar } from './ui.jsx'
 
-const QUESTIONS = 3
 const FACE = `${import.meta.env.BASE_URL}teachback/student-`
 // Minimum gap before each event is shown, so Reeta visibly types even when the stream arrives at once.
 const PACE = { question_start: 450, answer_delta: 28, answer_done: 250, graded: 550 }
@@ -16,7 +15,8 @@ const PACE = { question_start: 450, answer_delta: 28, answer_done: 250, graded: 
 // Quiz: the live exam (POST /exam/run). All questions are listed first; Reeta answers them one at a
 // time, typing as the stream arrives, then each answer is graded. Wrong answers highlight the exact
 // words of the Professor's lecture she relied on, with a replay button when there is a recording.
-export default function Quiz({ onClose, onDone }) {
+// `questions`: the topic's questions per quiz, or undefined for free practice (the backend picks the length).
+export default function Quiz({ questions, onClose, onDone }) {
   const reduce = useReducedMotion()
   const [qs, setQs] = useState(null)          // [{id, prompt, text, status, quote, ..., reason, feedback}]
   const [current, setCurrent] = useState(null)
@@ -85,7 +85,7 @@ export default function Quiz({ onClose, onDone }) {
     queue.current = []
     setQs(null); setCurrent(null); setResult(null); setError(null)
     try {
-      await api.runExam((name, d) => { queue.current.push([name, d]); pump() }, { questions: QUESTIONS, signal: ctrl.current.signal })
+      await api.runExam((name, d) => { queue.current.push([name, d]); pump() }, { questions, signal: ctrl.current.signal })
     } catch (e) {
       // the backend's own reason when it gave one (e.g. a topic without notes), else a lost connection
       if (e.name !== 'AbortError') setError(errorDetail(e) || 'Reeta lost her connection to the classroom. Try the quiz again?')
