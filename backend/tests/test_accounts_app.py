@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 
 OFFLINE = {"speech_provider": "browser", "llm_provider": "mock", "db_provider": "sqlite",
-           "sqlite_path": ":memory:", "question_source": "llm", "pass_threshold": 1.0}
+           "sqlite_path": ":memory:", "pass_threshold": 1.0}
 
 
 @pytest.fixture(scope="module")

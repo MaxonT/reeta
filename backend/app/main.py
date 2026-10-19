@@ -26,8 +26,7 @@ def build_service() -> ReetaService:
     repo.seed_content(load_exam(settings.content_dir, key))
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
                         key, settings.audio_dir, settings.pass_threshold,
-                        settings.max_source_chars, settings.max_notes_chars, settings.question_source,
-                        settings.content_dir / settings.question_file, settings.question_shuffle)
+                        settings.max_source_chars, settings.max_notes_chars)
 
 
 app = FastAPI(title="Reeta: teach the AI student")
@@ -158,17 +157,14 @@ def _sse(events):
 
 
 @app.post("/exam/run")
-def run_exam(questions: int = 5, source: str | None = None, session_id: str = Session):
-    """Streams the live exam: questions, Reeta's answers as they are typed, then grades. See FRONTEND_CHANGES.md.
-    `source` (llm | fixed) overrides QUESTION_SOURCE for this run."""
-    if source not in (None, "llm", "fixed"):
-        raise HTTPException(400, "source must be llm or fixed")
+def run_exam(questions: int = 5, session_id: str = Session):
+    """Streams the live exam: questions, Reeta's answers as they are typed, then grades. See FRONTEND_CHANGES.md."""
     topic_id = topic_of(session_id)
     if topic_id is not None:  # the teacher sets a topic's quiz length, and its notes are the only material
         if not svc.repo.list_sources(notes_session_for(session_id)):
             raise HTTPException(409, "Your teacher has not added notes for this topic yet.")
         questions = classwork.questions_for(topic_id) or questions
-    return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)), source)),
+    return StreamingResponse(_sse(svc.run_exam(session_id, max(1, min(questions, 10)))),
                              media_type="text/event-stream",
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 

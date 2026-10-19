@@ -107,9 +107,6 @@ def get_repository(provider: str) -> Repository:
     if provider == "sqlite":
         from .sqlite_repo import SQLiteRepository
         return SQLiteRepository(settings.sqlite_path)
-    if provider == "oracle":
-        from .oracle_repo import OracleRepository
-        return OracleRepository()
     if provider == "postgres":
         from .postgres_repo import PostgresRepository
         return PostgresRepository(settings.postgres_url)

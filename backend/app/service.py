@@ -5,7 +5,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from .content import AnswerKey, load_fixed_questions
+from .content import AnswerKey
 from .exam import AnswerStream, transcripts_text, verify_quotes
 from .grading import CORRECT, MISCONCEPTION, NOT_TAUGHT, concept_status, grade_exam
 from .llm.base import RESET, LLMClient, template_phrase
@@ -19,12 +19,8 @@ from .words import sentences_to_words
 class ReetaService:
     def __init__(self, repo: Repository, speech: SpeechClient, llm: LLMClient, key: AnswerKey,
                  audio_dir: Path, pass_threshold: float = 1.0,
-                 max_source_chars: int = 50_000, max_notes_chars: int = 60_000, question_source: str = "llm",
-                 question_file: Path | None = None, question_shuffle: bool = False):
+                 max_source_chars: int = 50_000, max_notes_chars: int = 60_000):
         self.repo, self.speech, self.llm, self.key = repo, speech, llm, key
-        self.question_source = question_source
-        self.question_file = question_file  # JSON of fixed questions, used when the source is "fixed"
-        self.question_shuffle = question_shuffle  # fixed: a random pick each run, else the first n in file order
         self.rng = random.Random()
         self.audio_dir = audio_dir
         self.pass_threshold = pass_threshold
@@ -82,21 +78,13 @@ class ReetaService:
 
     # 4. Live exam: questions from the course notes, Reeta answers from the transcripts, a judge grades.
     # A generator of {"event", "data"} dicts so the endpoint can stream them as they happen.
-    def _written_questions(self, session_id: str, n: int, source: str) -> list[dict]:
-        """[{prompt, reference_answer}] from the LLM question writer, or n from the fixed question file
-        (in file order, or a random pick when question_shuffle is on)."""
-        if source == "fixed":
-            if not self.question_file:
-                raise ValueError("QUESTION_SOURCE=fixed needs a question file")
-            fixed = load_fixed_questions(self.question_file)  # re-read each call, so edits show up without a restart
-            n = min(n, len(fixed))
-            return self.rng.sample(fixed, n) if self.question_shuffle else fixed[:n]
+    def _written_questions(self, session_id: str, n: int) -> list[dict]:
+        """[{prompt, reference_answer}] from the LLM question writer."""
         # a topic session quizzes on the teacher's notes for that topic
         notes = combine_sources(self.repo.list_sources(notes_session_for(session_id)), self.max_notes_chars)  # None: default notes
         return self.llm.generate_questions(self.key, n, notes)
 
-    def run_exam(self, session_id: str, n: int = 5, source: str | None = None) -> Iterator[dict]:
-        source = (source or self.question_source).lower()
+    def run_exam(self, session_id: str, n: int = 5) -> Iterator[dict]:
         # Reeta knows the newest lecture plus the office hours recorded after it. Older lectures drop out, and
         # blank ones (a failed upload) are skipped.
         taught = [lec for lec in self.repo.list_lectures(session_id) if (lec.get("text") or "").strip()]
@@ -104,7 +92,7 @@ class ReetaService:
         lectures = taught[start:]
         transcripts = transcripts_text(lectures)
         try:
-            questions = [{"id": f"q{i}", **q} for i, q in enumerate(self._written_questions(session_id, n, source), 1)]
+            questions = [{"id": f"q{i}", **q} for i, q in enumerate(self._written_questions(session_id, n), 1)]
         except Exception as exc:  # noqa: BLE001
             yield {"event": "error", "data": {"message": f"Could not write the exam: {exc}"}}
             return
