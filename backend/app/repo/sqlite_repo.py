@@ -29,14 +29,6 @@ class SQLiteRepository(Repository):
         with self.lock, self.conn:
             return self.conn.execute(sql, args).lastrowid
 
-    def seed_content(self, questions):
-        with self.lock, self.conn:
-            for q in questions:
-                self.conn.execute(
-                    "INSERT OR REPLACE INTO exam_questions (id, type, prompt, options, correct_answer) "
-                    "VALUES (?,?,?,?,?)",
-                    (q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"]))
-
     # Lectures
     def create_lecture(self, session_id, kind, text):
         return self._x("INSERT INTO lectures (session_id, kind, text) VALUES (?,?,?)", (session_id, kind, text))

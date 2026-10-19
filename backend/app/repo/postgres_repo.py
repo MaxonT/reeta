@@ -117,16 +117,6 @@ class PostgresRepository(Repository):
                 return await work(c)
         return self._run(go())
 
-    def seed_content(self, questions):
-        async def work(c):
-            for q in questions:
-                await c.execute(
-                    "INSERT INTO exam_questions (id, type, prompt, options, correct_answer) VALUES ($1,$2,$3,$4,$5) "
-                    "ON CONFLICT (id) DO UPDATE SET type=EXCLUDED.type, prompt=EXCLUDED.prompt, "
-                    "options=EXCLUDED.options, correct_answer=EXCLUDED.correct_answer",
-                    q["id"], q["type"], q["prompt"], json.dumps(q["options"]), q["correct_answer"])
-        self._tx(work)
-
     # Lectures
     def create_lecture(self, session_id, kind, text):
         return self._insert("INSERT INTO lectures (session_id, kind, text) VALUES ($1,$2,$3)",

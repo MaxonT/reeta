@@ -66,8 +66,3 @@ def test_misconception_without_mapping_still_answers_wrong():
           "return_propagation": entry(3, "return_propagation")}
     r = grade_question(Q, nb)
     assert not r["is_correct"] and r["answer"] != Q["correct_answer"] and r["answer"] in Q["options"]
-
-
-def test_every_exam_question_is_consistent(questions):
-    for q in questions:
-        assert grade_question(q, {})["reason"] == "not_taught"

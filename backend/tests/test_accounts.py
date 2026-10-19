@@ -4,8 +4,6 @@ from fastapi.testclient import TestClient
 
 from app.accounts import Accounts, check_password, hash_password
 from app.classwork import Classwork
-from app.config import settings
-from app.content import load_answer_key
 from app.llm.mock import MockLLMClient
 from app.repo.sqlite_repo import SQLiteRepository
 from app.service import ReetaService
@@ -22,7 +20,7 @@ def client(repo, tmp_path):
     app = FastAPI()
     accounts = Accounts(repo, pass_threshold=1.0)
     app.include_router(accounts.router)
-    svc = ReetaService(repo, BrowserSpeechClient(), MockLLMClient(), load_answer_key(settings.content_dir), tmp_path)
+    svc = ReetaService(repo, BrowserSpeechClient(), MockLLMClient(), tmp_path)
     app.include_router(Classwork(svc, accounts, max_source_bytes=200_000).router)
 
     @app.get("/whoami")  # stands in for every main.py route that takes Session

@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from .accounts import Accounts
 from .classwork import Classwork
 from .config import settings
-from .content import load_answer_key, load_exam
 from .llm.base import get_llm_client
 from .repo.base import get_repository
 from .service import ReetaService
@@ -21,11 +20,9 @@ from .speech.base import get_speech_client
 
 
 def build_service() -> ReetaService:
-    key = load_answer_key(settings.content_dir)
     repo = get_repository(settings.db_provider)
-    repo.seed_content(load_exam(settings.content_dir, key))
     return ReetaService(repo, get_speech_client(settings.speech_provider), get_llm_client(settings.llm_provider),
-                        key, settings.audio_dir, settings.pass_threshold,
+                        settings.audio_dir, settings.pass_threshold,
                         settings.max_source_chars, settings.max_notes_chars)
 
 
@@ -55,15 +52,6 @@ class ConfirmBody(BaseModel):
 @app.get("/health")
 def health():
     return {"ok": True, "speech": settings.speech_provider, "llm": settings.llm_provider, "db": settings.db_provider}
-
-
-@app.get("/answer-key")
-def answer_key():
-    """Concept and misconception labels for the UI (no exam answers)."""
-    return {"topic": svc.key.topic, "concepts": [
-        {"id": c["id"], "label": c["label"], "description": c["description"],
-         "misconceptions": [{"id": m["id"], "description": m["description"]} for m in c["misconceptions"]]}
-        for c in svc.key.concepts]}
 
 
 @app.post("/lectures/audio")

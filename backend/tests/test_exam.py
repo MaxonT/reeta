@@ -1,7 +1,3 @@
-import pytest
-
-from app.config import settings
-from app.content import load_answer_key
 from app.exam import AnswerStream, transcripts_text, verify_quote, verify_quotes
 from app.llm.mock import MockLLMClient
 from app.repo.sqlite_repo import SQLiteRepository
@@ -62,14 +58,15 @@ def test_transcripts_text_labels_lectures_and_skips_empty():
     assert out == "[Lecture 1]\none\n\n[Lecture 3]\ntwo"
 
 
-@pytest.fixture
-def key():
-    return load_answer_key(settings.content_dir)
+NOTES = ("A recursive function is able to call itself. "
+         "Photosynthesis happens inside the chloroplasts of plant cells. "
+         "Mitochondria produce most of the energy for the cell.")
 
 
-def make_svc(key, tmp_path, llm):
+def make_svc(tmp_path, llm):
     repo = SQLiteRepository(":memory:")
-    return repo, ReetaService(repo, BrowserSpeechClient(), llm, key, tmp_path / "audio")
+    repo.add_source("s1", "notes.txt", NOTES)  # the exam questions are written from the teacher's notes
+    return repo, ReetaService(repo, BrowserSpeechClient(), llm, tmp_path / "audio")
 
 
 def teach(repo, session="s1"):
@@ -86,31 +83,31 @@ def by_event(events):
     return out
 
 
-def test_run_exam_with_mock_grades_each_answer_and_stores_everything(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, MockLLMClient())
+def test_run_exam_with_mock_grades_each_answer_and_stores_everything(tmp_path):
+    repo, svc = make_svc(tmp_path, MockLLMClient())
     lid = teach(repo)
-    events = list(svc.run_exam("s1", 5))
+    events = list(svc.run_exam("s1", 3))
     ev = by_event(events)
 
-    assert len(ev["questions"][0]["questions"]) == 5
-    assert [g["id"] for g in ev["graded"]] == ["q1", "q2", "q3", "q4", "q5"]  # question order
+    assert len(ev["questions"][0]["questions"]) == 3
+    assert [g["id"] for g in ev["graded"]] == ["q1", "q2", "q3"]  # question order
     done = {d["id"]: d for d in ev["answer_done"]}
     assert done["q1"]["supported"] and done["q1"]["quote"] == "A function can call itself."
     assert done["q1"]["lecture_id"] == lid and done["q1"]["quote_end_ms"] == 2000
     graded = {g["id"]: g for g in ev["graded"]}
     assert graded["q1"]["is_correct"] and graded["q1"]["reason"] == "correct"
-    assert not graded["q2"]["is_correct"] and graded["q2"]["reason"] == "wrong"  # taught the misconception
+    assert graded["q2"]["reason"] == "not_taught" and not done["q2"]["supported"]  # never taught
     assert graded["q3"]["reason"] == "not_taught" and not done["q3"]["supported"]
-    assert ev["done"][0]["score"] == 1 and ev["done"][0]["total"] == 5
+    assert ev["done"][0]["score"] == 1 and ev["done"][0]["total"] == 3
 
     attempts = repo.list_attempts("s1")
-    assert attempts[0]["score"] == 1 and len(attempts[0]["answers"]) == 5
+    assert attempts[0]["score"] == 1 and len(attempts[0]["answers"]) == 3
     first = attempts[0]["answers"][0]
     assert first["prompt"] and first["reference_answer"] and first["quote"] and first["is_correct"] is True
 
 
-def test_answer_deltas_never_contain_the_quote_marker(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, MockLLMClient())
+def test_answer_deltas_never_contain_the_quote_marker(tmp_path):
+    repo, svc = make_svc(tmp_path, MockLLMClient())
     teach(repo)
     deltas = [e["data"]["text"] for e in svc.run_exam("s1", 2) if e["event"] == "answer_delta"]
     assert deltas and "QUOTE" not in "".join(deltas)
@@ -123,8 +120,8 @@ class InventsQuotes(MockLLMClient):
         yield "Every recursive function needs a base case.\nQUOTE: you always need a base case to stop"
 
 
-def test_a_quote_not_in_the_transcripts_does_not_count(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, InventsQuotes())
+def test_a_quote_not_in_the_transcripts_does_not_count(tmp_path):
+    repo, svc = make_svc(tmp_path, InventsQuotes())
     teach(repo)
     ev = by_event(svc.run_exam("s1", 2))
     assert all(not d["supported"] and d["quote"] is None for d in ev["answer_done"])
@@ -140,8 +137,8 @@ class Unsupported(MockLLMClient):
         return {"is_correct": False, "supported": False, "feedback": "The quote does not say that."}
 
 
-def test_an_unsupported_verdict_counts_as_not_taught(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, Unsupported())
+def test_an_unsupported_verdict_counts_as_not_taught(tmp_path):
+    repo, svc = make_svc(tmp_path, Unsupported())
     teach(repo)
     ev = by_event(svc.run_exam("s1", 1))
     assert ev["graded"][0]["reason"] == "not_taught" and not ev["graded"][0]["is_correct"]
@@ -150,12 +147,12 @@ def test_an_unsupported_verdict_counts_as_not_taught(key, tmp_path):
 
 
 class BrokenQuestions(MockLLMClient):
-    def generate_questions(self, key, n):
+    def generate_questions(self, n, notes):
         raise RuntimeError("model down")
 
 
-def test_run_exam_reports_an_error_event_if_questions_cannot_be_written(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, BrokenQuestions())
+def test_run_exam_reports_an_error_event_if_questions_cannot_be_written(tmp_path):
+    repo, svc = make_svc(tmp_path, BrokenQuestions())
     events = list(svc.run_exam("s1", 3))
     assert [e["event"] for e in events] == ["error"]
     assert repo.list_attempts("s1") == []
@@ -167,9 +164,9 @@ class RecordsTranscripts(MockLLMClient):
         yield "A function can call itself.\nQUOTE: A function can call itself"  # only true of the first lecture
 
 
-def test_exam_uses_the_newest_lecture_plus_office_hours_after_it(key, tmp_path):
+def test_exam_uses_the_newest_lecture_plus_office_hours_after_it(tmp_path):
     llm = RecordsTranscripts()
-    repo, svc = make_svc(key, tmp_path, llm)
+    repo, svc = make_svc(tmp_path, llm)
     repo.create_lecture("s1", "lecture", "A function can call itself. Old lecture.")
     repo.create_lecture("s1", "office_hours", "Old follow up.")
     repo.create_lecture("s1", "lecture", "Recursion stops by itself. New lecture.")
@@ -181,18 +178,18 @@ def test_exam_uses_the_newest_lecture_plus_office_hours_after_it(key, tmp_path):
     assert not ev["answer_done"][0]["supported"]  # her quote is from the old lecture, which she no longer has
 
 
-def test_exam_with_only_office_hours_uses_all_of_them(key, tmp_path):
+def test_exam_with_only_office_hours_uses_all_of_them(tmp_path):
     llm = RecordsTranscripts()
-    repo, svc = make_svc(key, tmp_path, llm)
+    repo, svc = make_svc(tmp_path, llm)
     repo.create_lecture("s1", "office_hours", "First follow up.")
     repo.create_lecture("s1", "office_hours", "Second follow up.")
     list(svc.run_exam("s1", 1))
     assert "First follow up" in llm.seen and "Second follow up" in llm.seen
 
 
-def test_exam_skips_a_blank_lecture(key, tmp_path):
+def test_exam_skips_a_blank_lecture(tmp_path):
     llm = RecordsTranscripts()
-    repo, svc = make_svc(key, tmp_path, llm)
+    repo, svc = make_svc(tmp_path, llm)
     repo.create_lecture("s1", "lecture", "Good lecture.")
     repo.create_lecture("s1", "lecture", "")  # e.g. a failed upload left an empty row
     list(svc.run_exam("s1", 1))
@@ -228,9 +225,9 @@ class TwoPassages(MockLLMClient):
         return {"is_correct": True, "supported": True, "feedback": "ok"}
 
 
-def test_an_answer_built_from_two_passages_is_supported_and_the_judge_sees_both(key, tmp_path):
+def test_an_answer_built_from_two_passages_is_supported_and_the_judge_sees_both(tmp_path):
     llm = TwoPassages()
-    repo, svc = make_svc(key, tmp_path, llm)
+    repo, svc = make_svc(tmp_path, llm)
     lid = repo.create_lecture("s1", "lecture", "Thylakoids hold the chlorophyll. The fluid around them is the stroma.")
     ev = by_event(svc.run_exam("s1", 1))
     done = ev["answer_done"][0]
@@ -247,8 +244,8 @@ class FakeQuoteOnly(MockLLMClient):
         yield "Something.\nQUOTE: this sentence was never said anywhere"
 
 
-def test_a_rejected_quote_is_shown_in_the_feedback(key, tmp_path):
-    repo, svc = make_svc(key, tmp_path, FakeQuoteOnly())
+def test_a_rejected_quote_is_shown_in_the_feedback(tmp_path):
+    repo, svc = make_svc(tmp_path, FakeQuoteOnly())
     teach(repo)
     ev = by_event(svc.run_exam("s1", 1))
     assert not ev["answer_done"][0]["supported"] and ev["answer_done"][0]["quotes"] == []

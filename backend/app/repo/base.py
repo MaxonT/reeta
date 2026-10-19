@@ -3,10 +3,6 @@ from abc import ABC, abstractmethod
 
 
 class Repository(ABC):
-    @abstractmethod
-    def seed_content(self, questions: list[dict]) -> None:
-        """Upsert Exam questions: id, type, prompt, options, correct_answer."""
-
     # Lectures: Reeta's memory is their transcripts
     @abstractmethod
     def create_lecture(self, session_id: str, kind: str, text: str) -> int: ...

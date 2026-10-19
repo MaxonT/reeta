@@ -25,7 +25,6 @@ class Settings:
     postgres_url: str = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL", "")
     sqlite_path: Path = _path(os.getenv("SQLITE_PATH", "backend/data/reeta.db"))
     audio_dir: Path = _path(os.getenv("AUDIO_DIR", "backend/data/audio"))
-    content_dir: Path = _path(os.getenv("CONTENT_DIR", "content"))
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_whisper_model: str = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
