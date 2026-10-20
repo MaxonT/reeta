@@ -3,10 +3,6 @@ from abc import ABC, abstractmethod
 
 
 class Repository(ABC):
-    @abstractmethod
-    def seed_content(self, questions: list[dict]) -> None:
-        """Upsert Exam questions: id, type, prompt, options, correct_answer."""
-
     # Lectures: Reeta's memory is their transcripts
     @abstractmethod
     def create_lecture(self, session_id: str, kind: str, text: str) -> int: ...
@@ -107,9 +103,6 @@ def get_repository(provider: str) -> Repository:
     if provider == "sqlite":
         from .sqlite_repo import SQLiteRepository
         return SQLiteRepository(settings.sqlite_path)
-    if provider == "oracle":
-        from .oracle_repo import OracleRepository
-        return OracleRepository()
     if provider == "postgres":
         from .postgres_repo import PostgresRepository
         return PostgresRepository(settings.postgres_url)

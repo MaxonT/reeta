@@ -20,28 +20,15 @@ def _path(value: str) -> Path:
 @dataclass(frozen=True)
 class Settings:
     speech_provider: str = os.getenv("SPEECH_PROVIDER", "openai").lower()
-    llm_provider: str = os.getenv("LLM_PROVIDER", "mock").lower()
-    db_provider: str = os.getenv("DB_PROVIDER", "sqlite").lower()
-    question_source: str = os.getenv("QUESTION_SOURCE", "llm").lower()  # llm | fixed
-    question_file: str = os.getenv("QUESTION_FILE", "photosynthesis_questions.json")  # in CONTENT_DIR, for fixed
-    question_shuffle: bool = os.getenv("QUESTION_SHUFFLE", "false").lower() in ("1", "true", "yes")  # fixed: random pick
-    sqlite_path: Path = _path(os.getenv("SQLITE_PATH", "backend/data/reeta.db"))
+    llm_provider: str = os.getenv("LLM_PROVIDER").lower()
+    db_provider: str = os.getenv("DB_PROVIDER").lower()
     postgres_url: str = os.getenv("POSTGRES_URL") or os.getenv("DATABASE_URL", "")
+    sqlite_path: Path = _path(os.getenv("SQLITE_PATH", "backend/data/reeta.db"))
     audio_dir: Path = _path(os.getenv("AUDIO_DIR", "backend/data/audio"))
-    content_dir: Path = _path(os.getenv("CONTENT_DIR", "content"))
     openai_api_key: str = os.getenv("OPENAI_API_KEY", "")
     openai_model: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     openai_whisper_model: str = os.getenv("OPENAI_WHISPER_MODEL", "whisper-1")
-    oci_config_file: str = os.getenv("OCI_CONFIG_FILE", "~/.oci/config")
-    oci_profile: str = os.getenv("OCI_PROFILE", "DEFAULT")
-    oci_region: str = os.getenv("OCI_REGION", "us-chicago-1")
-    oci_compartment_id: str = os.getenv("OCI_COMPARTMENT_ID", "")
-    oci_genai_model_id: str = os.getenv("OCI_GENAI_MODEL_ID", "")
-    oracle_user: str = os.getenv("ORACLE_USER", "ADMIN")
-    oracle_password: str = os.getenv("ORACLE_PASSWORD", "")
-    oracle_dsn: str = os.getenv("ORACLE_DSN", "")
-    oracle_wallet_dir: str = os.getenv("ORACLE_WALLET_DIR", "backend/wallet")
-    oracle_wallet_password: str = os.getenv("ORACLE_WALLET_PASSWORD", "")
+    database_url: str = os.getenv("DATABASE_URL")  # postgresql://..., for DB_PROVIDER=postgres and Alembic
     max_source_chars: int = int(os.getenv("MAX_SOURCE_CHARS", "50000"))  # per uploaded source
     max_notes_chars: int = int(os.getenv("MAX_NOTES_CHARS", "60000"))    # all sources together, in the prompt
     pass_threshold: float = float(os.getenv("PASS_THRESHOLD", "1.0"))

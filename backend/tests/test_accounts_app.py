@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from app.config import settings
 
 OFFLINE = {"speech_provider": "browser", "llm_provider": "mock", "db_provider": "sqlite",
-           "sqlite_path": ":memory:", "question_source": "llm", "pass_threshold": 1.0}
+           "sqlite_path": ":memory:", "pass_threshold": 1.0}
 
 
 @pytest.fixture(scope="module")
@@ -238,6 +238,8 @@ def test_topic_quizzes_land_in_the_teacher_gradebook(client):
     done = run_exam(client, on(ada, topic))
     run_exam(client, on(lazy, topic))  # taught nothing
     teach(client, lazy, "Free practice lesson about recursion calling itself.")
+    client.post("/sources", data={"text": "Recursion is when a function calls itself to solve smaller problems."},
+                headers=lazy)  # free practice has no teacher notes, so the student brings their own
     run_exam(client, lazy)  # free practice: not a topic grade
 
     book = client.get(f"/classes/{cls['id']}/gradebook", headers=teacher).json()

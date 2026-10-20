@@ -20,9 +20,6 @@ def get_speech_client(provider: str) -> SpeechClient:
     if provider == "openai":
         from .openai_whisper import OpenAIWhisperClient
         return OpenAIWhisperClient()
-    if provider == "oci":
-        from .oci_speech import OCISpeechClient
-        return OCISpeechClient()
     if provider == "browser":
         return BrowserSpeechClient()
     raise ValueError(f"unknown SPEECH_PROVIDER {provider!r}")

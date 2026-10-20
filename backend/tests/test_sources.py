@@ -1,7 +1,5 @@
 import pytest
 
-from app.config import settings
-from app.content import load_answer_key
 from app.llm.mock import MockLLMClient
 from app.repo.sqlite_repo import SQLiteRepository
 from app.service import ReetaService
@@ -44,24 +42,19 @@ def test_combine_sources_labels_each_source_and_caps_the_total():
     assert combine_sources(srcs, 10) == "## a.txt\no"  # 9 characters of label, then 1 of text
 
 
-@pytest.fixture
-def key():
-    return load_answer_key(settings.content_dir)
-
-
 class RecordsNotes(MockLLMClient):
-    def generate_questions(self, key, n, notes=None):
+    def generate_questions(self, n, notes):
         self.notes = notes
-        return super().generate_questions(key, n, notes)
+        return super().generate_questions(n, notes)
 
 
-def make(key, tmp_path, llm=None):
+def make(tmp_path, llm=None):
     repo = SQLiteRepository(":memory:")
-    return repo, ReetaService(repo, BrowserSpeechClient(), llm or MockLLMClient(), key, tmp_path / "audio")
+    return repo, ReetaService(repo, BrowserSpeechClient(), llm or MockLLMClient(), tmp_path / "audio")
 
 
-def test_sources_are_per_session_and_reset_clears_them(key, tmp_path):
-    repo, svc = make(key, tmp_path)
+def test_sources_are_per_session_and_reset_clears_them(tmp_path):
+    repo, svc = make(tmp_path)
     a = svc.add_source("s1", "a.txt", b"first notes", None)
     b = svc.add_source("s1", None, None, "pasted bit")
     svc.add_source("s2", "other.txt", b"someone else", None)
@@ -75,16 +68,17 @@ def test_sources_are_per_session_and_reset_clears_them(key, tmp_path):
     assert svc.list_sources("s1") == [] and len(svc.list_sources("s2")) == 1
 
 
-def test_exam_uses_default_notes_when_there_are_no_sources(key, tmp_path):
+def test_exam_without_any_notes_ends_with_an_error_event_and_never_calls_the_llm(tmp_path):
     llm = RecordsNotes()
-    _, svc = make(key, tmp_path, llm)
-    list(svc.run_exam("s1", 2))
-    assert llm.notes is None
+    _, svc = make(tmp_path, llm)
+    events = list(svc.run_exam("s1", 2))
+    assert [e["event"] for e in events] == ["error"] and "notes" in events[0]["data"]["message"]
+    assert not hasattr(llm, "notes")
 
 
-def test_exam_questions_are_written_from_the_uploaded_notes(key, tmp_path):
+def test_exam_questions_are_written_from_the_uploaded_notes(tmp_path):
     llm = RecordsNotes()
-    repo, svc = make(key, tmp_path, llm)
+    repo, svc = make(tmp_path, llm)
     svc.add_source("s1", "notes.txt", b"Recursion needs a base case to stop. Each recursive call works on a smaller problem.", None)
     svc.ingest_lecture("s1", "lecture", None, "", None, "Every recursion needs a base case to stop.")
     events = list(svc.run_exam("s1", 2))
@@ -99,8 +93,8 @@ def test_exam_questions_are_written_from_the_uploaded_notes(key, tmp_path):
     assert answers[0]["reference_answer"].startswith("Recursion needs a base case")
 
 
-def test_unusable_notes_end_the_exam_with_an_error_event(key, tmp_path):
-    _, svc = make(key, tmp_path)
+def test_unusable_notes_end_the_exam_with_an_error_event(tmp_path):
+    _, svc = make(tmp_path)
     svc.add_source("s1", None, None, "Too short.")
     events = list(svc.run_exam("s1", 2))
     assert [e["event"] for e in events] == ["error"]

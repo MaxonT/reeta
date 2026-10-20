@@ -1,9 +1,8 @@
-"""Offline extractor: synonym and misconception phrase matching. The demo safety net."""
+"""Offline stand-in for the live exam: questions and answers built from the notes by word overlap. The demo safety net."""
 import re
 from collections.abc import Iterator
 
-from ..content import AnswerKey
-from .base import LLMClient, template_phrase, validate_entries
+from .base import LLMClient
 
 _NEGATION = re.compile(r"\b(not|never|no|don't|dont|doesn't|doesnt|isn't|isnt|aren't|won't|can't|cannot)\b")
 
@@ -41,47 +40,12 @@ def _overlap(text: str, ref: str) -> float:
 
 
 class MockLLMClient(LLMClient):
-    def extract_entries(self, sentences: list[dict], key: AnswerKey) -> list[dict]:
-        raw = []
-        for s in sentences:
-            text = _norm(s["text"])
-            for concept in key.concepts:
-                entry = self._match_concept(text, concept)
-                if entry:
-                    raw.append({"sentence_idx": s["idx"], "concept_id": concept["id"], **entry})
-        return validate_entries(raw, sentences, key)
-
-    @staticmethod
-    def _match_concept(text: str, concept: dict) -> dict | None:
-        for m in concept.get("misconceptions", []):
-            for phrase in m["phrases"]:
-                pos = _find(text, phrase)
-                if pos >= 0:
-                    if _negated(text, pos):  # "it does NOT stop by itself" is a correct statement
-                        return {"status": "correct", "misconception_id": None}
-                    return {"status": "misconception", "misconception_id": m["id"]}
-        for syn in concept.get("synonyms", []):
-            if _find(text, syn) >= 0:
-                return {"status": "correct", "misconception_id": None}
-        return None
-
-    def phrase(self, result: dict, question: dict, key: AnswerKey) -> str:
-        return template_phrase(result, question, key)
-
-    # Live exam, offline. Default notes: one question per concept, answered by quoting the matching sentence.
-    # Uploaded notes: one question per sentence, answered by the transcript sentence sharing the most words.
+    # Live exam, offline: one question per notes sentence, answered by the transcript sentence sharing the most words.
     def __init__(self):
-        self._concepts: dict[str, dict] = {}  # question prompt -> concept it was written from
-        self._refs: dict[str, str] = {}       # question prompt -> notes sentence it was written from
+        self._refs: dict[str, str] = {}  # question prompt -> notes sentence it was written from
 
-    def generate_questions(self, key: AnswerKey, n: int, notes: str | None = None) -> list[dict]:
+    def generate_questions(self, n: int, notes: str) -> list[dict]:
         out = []
-        if notes is None:
-            for c in key.concepts[:n]:
-                prompt = f"In your own words, explain: {c['label'].lower()}."
-                self._concepts[prompt] = c
-                out.append({"prompt": prompt, "reference_answer": c["description"]})
-            return out
         for s in _sentences(notes):
             if len(s.split()) < 6:
                 continue
@@ -95,11 +59,9 @@ class MockLLMClient(LLMClient):
         return out
 
     def answer_stream(self, question: str, transcripts: str) -> Iterator[str]:
-        concept, ref = self._concepts.get(question), self._refs.get(question)
+        ref = self._refs.get(question)
         sentences = _sentences(transcripts)
-        if concept:
-            hits = [s for s in sentences if self._match_concept(_norm(s), concept)]
-        elif ref:
+        if ref:
             best = max(sentences, key=lambda s: _overlap(s, ref), default=None)
             hits = [best] if best and _overlap(best, ref) >= _MIN_OVERLAP else []
         else:
@@ -111,14 +73,6 @@ class MockLLMClient(LLMClient):
 
     def judge(self, question: str, reference: str, answer: str, quote: str) -> dict:
         # the mock only ever answers by quoting a sentence, so its answers are always supported by the quote
-        if question in self._refs:
-            if _overlap(answer, self._refs[question]) >= _MIN_OVERLAP:
-                return {"is_correct": True, "supported": True, "feedback": "That matches the notes."}
-            return {"is_correct": False, "supported": True, "feedback": "That does not cover the key idea."}
-        concept = self._concepts.get(question)
-        match = self._match_concept(_norm(answer), concept) if concept else None
-        if match and match["status"] == "correct":
-            return {"is_correct": True, "supported": True, "feedback": "That matches the course notes."}
-        if match:
-            return {"is_correct": False, "supported": True, "feedback": "That is a common misconception."}
+        if question in self._refs and _overlap(answer, self._refs[question]) >= _MIN_OVERLAP:
+            return {"is_correct": True, "supported": True, "feedback": "That matches the notes."}
         return {"is_correct": False, "supported": True, "feedback": "That does not cover the key idea."}
